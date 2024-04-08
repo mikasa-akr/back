@@ -1,0 +1,27 @@
+version: '3'
+
+networks:
+  school-network:
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    networks:
+      - school-network
+
+  database:
+    image: mysql:8
+    container_name: project_database
+    environment:
+      MYSQL_ROOT_PASSWORD: AzErTy#12345#
+      MYSQL_DATABASE: school
+      MYSQL_USER: pfe
+      MYSQL_PASSWORD: AzErTy-12345
+    ports:
+      - "3307:3306"
+    networks:
+      - school-network  # Add the database service to the network

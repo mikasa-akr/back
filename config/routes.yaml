@@ -3,3 +3,21 @@ controllers:
         path: ../src/Controller/
         namespace: App\Controller
     type: attribute
+
+api_login_check:
+  path: /api/login_check
+  controller: App\Controller\SecurityController::login
+
+api_logout:
+  path: /api/logout
+  controller: App\Controller\SecurityController::logout
+
+liste_groupe_for_teacher:
+    path: /api/crud/teacher/listeGroupe/{id}
+    controller: App\Controller\TeacherCRUDController::getGroupsForTeacher
+    methods: ['GET']
+
+api_session:
+    path: /api/session/teacher/{id}
+    controller: App\Controller\SessionController::SessionTeacher
+    methods: ['GET']
