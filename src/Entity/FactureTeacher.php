@@ -34,6 +34,9 @@ class FactureTeacher
     #[ORM\OneToMany(targetEntity: Session::class, mappedBy: 'factureTeacher')]
     private Collection $session;
 
+    #[ORM\Column(length: 255)]
+    private ?string $cardNumber = null;
+
 
     public function __construct()
     {
@@ -131,6 +134,18 @@ class FactureTeacher
                 $session->setFactureTeacher(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getCardNumber(): ?string
+    {
+        return $this->cardNumber;
+    }
+
+    public function setCardNumber(string $cardNumber): static
+    {
+        $this->cardNumber = $cardNumber;
 
         return $this;
     }

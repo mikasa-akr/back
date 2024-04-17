@@ -30,27 +30,24 @@ class GroupCRUDController extends AbstractController
         $data = [];
     
         foreach ($groups as $group) {
-            $teachers = [];
-            foreach ($group->getTeachers() as $teacher) {
-                $teachers[] = [
-                    'id' => $teacher->getId(),
-                    'firstName' => $teacher->getFirstName(),
-                ];
-            }
     
             $students = [];
             foreach ($group->getStudents() as $student) {
                 $students[] = [
                     'id' => $student->getId(),
                     'firstName' => $student->getFirstName(),
+                    'lastName' => $student->getLastName(),
                 ];
             }
     
             $data[] = [
                 'id' => $group->getId(),
                 'type' => $group->getType(),
-                'teacher_id' => $teachers,
+                'teacher_first' => $group->getTeach()->getFirstName(),
+                'teacher_last' => $group->getTeach()->getLastName(),
                 'student_id' => $students,
+                'name'=>$group->getName(),
+                'avatar'=>$group->getAvatar()
             ];
         }
     

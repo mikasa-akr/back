@@ -2,16 +2,17 @@
 
 namespace App\Controller;
 
+use DateTime;
 use App\Entity\Course;
 use App\Entity\Forfait;
 use App\Entity\Payment;
 use App\Entity\Student;
-use App\Repository\PaymentRepository;
-use App\Service\StripeService;
-use App\Repository\StudentRepository;
-use DateTime;
-use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use App\Service\StripeService;
+use App\Repository\PaymentRepository;
+use App\Repository\SessionRepository;
+use App\Repository\StudentRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -43,7 +44,7 @@ class StudentCRUDController extends AbstractController
             $courseTypes = []; // Initialize array to store course types
     
             foreach ($courses as $course) {
-                $courseTypes[] = $course->getType(); // Add course type to the array
+                $courseTypes[] = $course->getType().' '; // Add course type to the array
             }    
             $data[] = [
                 'id'=> $student->getId(),
@@ -63,6 +64,41 @@ class StudentCRUDController extends AbstractController
     
         return new JsonResponse($data, Response::HTTP_OK);
     }
+
+    #[Route('/{id}', name: 'api_crud_student_show', methods: ['GET'])]
+    public function show($id): JsonResponse
+    {
+        $student = $this->studentRepository->findOneBy(['id' => $id]);
+        
+        if (!$student) {
+            return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+        }
+    
+        $courses = $student->getCourse();
+        $courseTypes = [];
+    
+        foreach ($courses as $course) {
+            $courseTypes[] = $course->getType();
+        }    
+    
+        $data = [
+            'id' => $student->getId(),
+            'firstName' => $student->getFirstName(),
+            'lastName' => $student->getLastName(),
+            'email' => $student->getEmail(),
+            'avatar' => $student->getAvatar(),
+            'gender' => $student->getGender(),
+            'number' => $student->getNumber(),
+            'age' => $student->getAge(),
+            'status' => $student->getStatus(),
+            'forfait_id' => $student->getForfait()->getTitle(),
+            'subscription' => $student->getForfait()->getSubscription(),
+            'course_types' => $courseTypes,
+        ];
+    
+        return new JsonResponse($data, Response::HTTP_OK);
+    }
+    
 
     #[Route('/{id}/edit', name: 'api_crud_student_edit', methods: ['PUT'])]
     public function update($id, Request $request,EntityManagerInterface $entityManager): JsonResponse
@@ -128,87 +164,6 @@ class StudentCRUDController extends AbstractController
     ]);
 
     return new JsonResponse($data, Response::HTTP_OK, [], true);
-}
-
-#[Route('/payment/student/{id}', name: 'api_payment_student', methods: ['POST'])]
-public function processPayment($id, Request $request, EntityManagerInterface $entityManager,LoggerInterface $logger): Response
-{
-    $requestData = $request->getContent();
-
-    // Log the content of the request
-    $logger->debug('Request data: '.$requestData);
-
-    // Attempt to decode the JSON payload
-    $data = json_decode($requestData, true);
-
-    $student = $this->studentRepository->findOneBy(['id' => $id]);
-    if (!$student) {
-        return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
-    }
-
-    $paymentMethod = $request->request->get('method');
-    $amount = $request->request->get('amount');
-    $fileTransaction = $request->files->get('fileTransaction');
-
-    $datePay = new \DateTime('now');
-
-    $payment = new Payment();
-    $payment->setDatePay($datePay);
-    $payment->setMethode($paymentMethod);
-    $payment->setStudent($student);
-    $payment->setAmount($amount);
-
-    try {
-        // Use Stripe library directly
-        \Stripe\Stripe::setApiKey($_ENV["STRIPE_SECRET"]);
-
-        $paymentIntent = \Stripe\PaymentIntent::create([
-            'amount' => $amount * 100, // Convert to cents
-            'currency' => 'usd',
-            'description' => 'Course Payment',
-            'confirm' => true, // Confirm the PaymentIntent immediately
-            'payment_method' => 'pm_card_visa', // Example payment method ID (replace with actual payment method ID)
-            'return_url' => 'https://dashboard.stripe.com/test/dashboard', // Specify the return URL for the payment
-        ]);
-
-        // Process payment based on payment method
-             if ($paymentMethod === 'stripeCard') {
-                $paymentMeth = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-            $cardNumber = $paymentMeth->card->last4;
-            $maskedCardNumber = "**** **** **** " . $cardNumber;
-            $payment->setCardNumber($maskedCardNumber);
-            $payment->setTransactionFile("");
-            $payment->setStatus("payed");   
-             } elseif ($paymentMethod === 'transaction') {
-                if ($fileTransaction) {
-                    // Move uploaded file to a directory
-                    $fileName = md5(uniqid()) . '.' . $fileTransaction->guessExtension();
-                    $fileTransaction->move(
-                        $this->getParameter('PFE'),
-                        $fileName
-                    );
-                    $payment->setTransactionFile($fileName);
-                    $payment->setCardNumber(" ");
-                    $payment->setStatus("not payed");
-                } else {
-                    return $this->json(['error' => 'File transaction is missing'], Response::HTTP_BAD_REQUEST);
-                }
-        } else {
-            return $this->json(['error' => 'Invalid payment method'], Response::HTTP_BAD_REQUEST);
-        }
-
-        // Persist payment entity with client secret
-        $entityManager->persist($payment);
-        $entityManager->flush();
-
-        // Return success message with client secret for frontend capture
-        return $this->json([
-            'message' => 'Payment initiated successfully',
-            'clientSecret' => $paymentIntent->client_secret,
-        ]);
-    } catch (\Exception $e) {
-        return $this->json(['error' => 'Payment failed: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
-    }
 }
 
 #[Route('/restHour/{id}', name: 'api_crud_hour_rest', methods: ['GET'])]
@@ -278,5 +233,82 @@ public function TotalPayment(PaymentRepository $paymentRepository): Response
 
     return $this->json(["totalPay"=>$totalPay,"totalNotPay"=>$totalNotPay], Response::HTTP_OK);
 }
+
+#[Route('/total/session/{id}', name: 'api_crud_session_total', methods: ['GET'])]
+public function TotalSession($id): Response
+{
+    // Find sessions where the teacher ID matches the provided $id
+    $students = $this->studentRepository->findBy(['id'=>$id]);
+
+    $totalsessions = 0;
+    foreach($students as $g){
+        $groups=$g->getGroupe();
+        foreach($groups as $group){
+            $sessions=$group->getSessions();
+            foreach($sessions as $session){
+                    $totalsessions ++;
+            }
+        }
+    }
+
+    return $this->json(['totalsessions' => $totalsessions], Response::HTTP_OK);
+}
+
+#[Route('/total/session/count/{id}', name: 'api_crud_session_count', methods: ['GET'])]
+public function SessionCount($id, SessionRepository $sessionRepository): Response
+{
+    $sessions = $sessionRepository->findBy(['teacher' => $id]);
+
+    $totalsessionsC = 0;
+
+    foreach ($sessions as $session) {
+        if ($session->getStatus() === 'done') {
+            $totalsessionsC++;
+        }
+    }
+
+    return $this->json([
+        'totalsessionsDone' => $totalsessionsC,
+    ], Response::HTTP_OK);
+}
+
+
+
+#[Route('/total/session/next/{id}', name: 'api_crud_session_next', methods: ['GET'])]
+public function NextSession($id): JsonResponse
+{
+    // Find a single student by ID
+    $student = $this->studentRepository->find($id);
+
+    if (!$student) {
+        return $this->json(['message' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
+    }
+
+    $totalsessions = 0;
+    $closestSession = null;
+    $closestSessionDiff = null;
+    $currentTimestamp = (new \DateTime())->getTimestamp();
+
+    foreach ($student->getGroupe() as $group) {
+        foreach ($group->getSessions() as $session) {
+            $totalsessions++;
+            $sessionDate = $session->getDateSeance();
+            $sessionTimestamp = $sessionDate->getTimestamp();
+            $diff = abs($sessionTimestamp - $currentTimestamp) / (60 * 60 * 24); // Convert seconds to days
+            if ($closestSessionDiff === null || $diff < $closestSessionDiff) {
+                $closestSession = $session->getDateSeance()->format("Y-m-d");
+                $closestSessionDiff = $diff;
+            }
+        }
+    }
+
+    // Prepare response data
+    $responseData = [
+        'closestSession' => $closestSession
+    ];
+    return $this->json($responseData, JsonResponse::HTTP_OK, [], ['groups' => 'group_list']);
+}
+
+
 
 }

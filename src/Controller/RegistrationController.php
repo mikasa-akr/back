@@ -2,20 +2,24 @@
 
 namespace App\Controller;
 
+use DateTime;
 use Stripe\Stripe;
 use App\Entity\Group;
 use App\Entity\Course;
 use App\Entity\Forfait;
+use App\Entity\Payment;
 use App\Entity\Student;
 use App\Entity\Teacher;
-use DateTime;
+use App\Repository\StudentRepository;
+use App\Repository\TeacherRepository;
+use Psr\Log\LoggerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Stripe\Exception\InvalidRequestException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Stripe\Exception\InvalidRequestException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
@@ -36,36 +40,25 @@ class RegistrationController extends AbstractController
                 return $this->json(['error' => 'Missing required field: ' . $field], Response::HTTP_BAD_REQUEST);
             }
         }
-        Stripe::setApiKey('pk_test_51OyasWBNWgwGqFvzzcG0jn80B1lHgihqrkhbRdcCvexIeAZcLur7KbRpipxkKC9DTkO1xhsLehILhrBNm8Wi9ep400Td1NEJiI');
-        $email = $data['email'];
-        $plaintextPassword = $data['password'];
-        $firstName = $data['first_name'];
-        $lastName = $data['last_name'];
-        $number = $data['number'];
-        $gender = $data['gender'];
+        $email = $request->request->get('email');
+        $plaintextPassword = $request->request->get('password');
+        $firstName = $request->request->get('first_name');
+        $lastName = $request->request->get('last_name');
+        $number =$request->request->get('number');
+        $gender = $request->request->get('gender');
         $registeredAt=new DateTime('now');
-        $avatar = $data['avatar'] ?? null;
-        $cardNumber = $data['cardNumber'] ;
-        try {
-            $card = \Stripe\Token::create([
-                'card' => [
-                    'number' => $cardNumber,
-                    'exp_month' => 12,  // Replace with actual month (1-12)
-                    'exp_year' => 2024, // Replace with actual year
-                ],
-            ]);
-        } catch (InvalidRequestException $e) {
-            // Handle invalid card number error
-            return $this->json(['error' => 'Invalid card number'], Response::HTTP_BAD_REQUEST);
+        $avatarFile = $request->files->get('avatar');
+
+        $avatarFileName = null;
+        if ($avatarFile) {
+            // Move uploaded file to a directory
+            $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
+            $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
         }
-        if (!empty($data['course_id'])) {
-            $courseId = $data['course_id'];
-            $course = $entityManager->getRepository(Course::class)->find($courseId);
-            if (!$course) {
-                return $this->json(['error' => 'Course not found'], Response::HTTP_NOT_FOUND);
-            }
-        } else {
-            return $this->json(['error' => 'Course ID is required'], Response::HTTP_BAD_REQUEST);
+        $courseId = $request->request->get('course_id');
+        $course = $entityManager->getRepository(Course::class)->find($courseId);
+        if (!$course) {
+            return $this->json(['error' => 'course not found'], Response::HTTP_NOT_FOUND);
         }
     
         $teacher = new Teacher();
@@ -78,10 +71,9 @@ class RegistrationController extends AbstractController
         $teacher->setRegisteredAt($registeredAt);
         $teacher->setNumber($number);
         $teacher->setGender($gender);
-        $teacher->setAvatar($avatar);
+        $teacher->setAvatar($avatarFileName);
         $teacher->setCourse($course);
         $teacher->setStatus("offline");
-        $teacher->setCardNumber($cardNumber);
         $teacher->setHourlyRate(30);
         $em->persist($teacher);
         $em->flush();
@@ -91,48 +83,55 @@ class RegistrationController extends AbstractController
     }
 
     #[Route('/signUp/student', name: 'api_register_student', methods: ['POST'])]
-    public function registerStudent(ManagerRegistry $doctrine, Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager): Response
-    {
-        $data = json_decode($request->getContent(), true);
-        if (null === $data) {
-            return $this->json(['message' => 'Invalid JSON payload'], 400);
+    public function registerStudent(Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager, LoggerInterface $logger): Response {
+        // Extract form data from the request
+        $plaintextPassword = $request->request->get('password');
+        $firstName = $request->request->get('firstName');
+        $lastName = $request->request->get('lastName');
+        $email = $request->request->get('email');
+        $number = $request->request->get('number');
+        $gender = $request->request->get('gender');
+        $age = $request->request->get('age');
+        $avatarFile = $request->files->get('avatar');
+        $dateAt = new \DateTime('now');
+        
+        // Validate form data (optional)
+    
+        // Handle avatar upload
+        $avatarFileName = null;
+        if ($avatarFile) {
+            // Move uploaded file to a directory
+            $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
+            $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
         }
-        $email = $data['email'] ?? null;
-        $plaintextPassword = $data['password'] ?? null;
-        $firstName = $data['firstName'] ?? null;
-        $lastName = $data['lastName'] ?? null;
-        $number = $data['number'] ?? null;
-        $gender = $data['gender'] ?? null;
-        $avatar = $data['avatar'] ?? null;
-        $age = $data['age'] ?? null;
     
         // Extract forfait data from the request
-        if (empty($data['forfait_id'])) {
-            return $this->json(['error' => 'forfait ID is required'], Response::HTTP_BAD_REQUEST);
-        }
-        $forfaitId = $data['forfait_id'];
+        $forfaitId = $request->request->get('forfait_id');
         $forfait = $entityManager->getRepository(Forfait::class)->find($forfaitId);
         if (!$forfait) {
             return $this->json(['error' => 'forfait not found'], Response::HTTP_NOT_FOUND);
         }
     
-        // Extract course data from the request
-        if (empty($data['course_ids']) || !is_array($data['course_ids'])) {
-            return $this->json(['error' => 'course IDs are required and must be an array'], Response::HTTP_BAD_REQUEST);
+        $courseIds = $request->request->get('course_ids');
+        $courseIds = json_decode($courseIds, true); // Decode JSON string to a PHP array
+        if (!$courseIds) {
+            return $this->json(['error' => 'course IDs are required'], Response::HTTP_BAD_REQUEST);
         }
-        $courseIds = $data['course_ids'];
+        
+        // Retrieve course entities
         $courses = [];
-        foreach ($courseIds as $courseId) {
+        foreach ($courseIds as $courseId) { // Iterate through decoded array
             $course = $entityManager->getRepository(Course::class)->find($courseId);
             if (!$course) {
                 return $this->json(['error' => 'course not found for ID: ' . $courseId], Response::HTTP_NOT_FOUND);
             }
             $courses[] = $course;
         }
+        
     
         // Check if a student with the given email already exists
         $existingStudent = $entityManager->getRepository(Student::class)->findOneBy(['email' => $email]);
-    
+        
         if ($existingStudent) {
             // Update the existing student entity with the new course(s)
             foreach ($courses as $course) {
@@ -140,6 +139,7 @@ class RegistrationController extends AbstractController
             }
             $entityManager->persist($existingStudent);
         } else {
+            // Create a new student entity
             $student = new Student();
             $hashedPassword = $passwordHasher->hashPassword($student, $plaintextPassword);
             $student->setPassword($hashedPassword);
@@ -147,9 +147,10 @@ class RegistrationController extends AbstractController
             $student->setRoles(['ROLE_STUDENT']);
             $student->setFirstName($firstName);
             $student->setLastName($lastName);
+            $student->setDateAt($dateAt);
             $student->setNumber($number);
             $student->setGender($gender);
-            $student->setAvatar($avatar);
+            $student->setAvatar($avatarFileName); // Set avatar file name
             $student->setAge($age);
             $student->setStatus("offline");
             $student->setForfait($forfait);
@@ -159,10 +160,76 @@ class RegistrationController extends AbstractController
             $entityManager->persist($student);
         }
     
-        $entityManager->flush();
-        
-        return $this->json(['message' => 'Registered Successfully']);
+        // Process Payment
+        $paymentMethod = $request->request->get('method');
+        $amount = $forfait->getPrice();
+        $fileTransaction = $request->files->get('fileTransaction');
+    
+        $datePay = new \DateTime('now');
+    
+        $payment = new Payment();
+        $payment->setDatePay($datePay);
+        $payment->setMethode($paymentMethod); 
+        $payment->setAmount($amount);  
+        if (isset($student)) {
+            $payment->setStudent($student);
+        }
+    
+        try {
+            // Use Stripe library directly
+            \Stripe\Stripe::setApiKey($_ENV["STRIPE_SECRET"]);
+    
+            $paymentIntent = \Stripe\PaymentIntent::create([
+                'amount' => $amount * 100, // Convert to cents
+                'currency' => 'usd',
+                'description' => 'Course Payment',
+                //'confirm' => true, // Confirm the PaymentIntent immediately
+                'payment_method' => 'pm_card_visa', // Example payment method ID (replace with actual payment method ID)
+                //'return_url' => 'https://dashboard.stripe.com/test/dashboard', // Specify the return URL for the payment
+            ]);
+    
+            // Process payment based on payment method
+            if ($paymentMethod === 'stripeCard') {
+                $paymentMeth = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
+                $cardNumber = $paymentMeth->card->last4;
+                $maskedCardNumber = "**** **** **** " . $cardNumber;
+                $payment->setCardNumber($maskedCardNumber);
+                $payment->setTransactionFile("0.png");
+                $payment->setStatus("payed");
+            } elseif ($paymentMethod === 'transaction') {
+                if ($fileTransaction) {
+                    // Move uploaded file to a directory
+                    $fileName = md5(uniqid()) . '.' . $fileTransaction->guessExtension();
+                    $fileTransaction->move(
+                        $this->getParameter('PFE'),
+                        $fileName
+                    );
+                    $payment->setTransactionFile($fileName);
+                    $payment->setCardNumber(" ");
+                    $payment->setStatus("not payed");
+                } else {
+                    return $this->json(['error' => 'File transaction is missing'], Response::HTTP_BAD_REQUEST);
+                }
+            } else {
+                return $this->json(['error' => 'Invalid payment method'], Response::HTTP_BAD_REQUEST);
+            }
+    
+            // Persist payment entity with client secret
+            $entityManager->persist($payment);
+            $entityManager->flush();
+    
+            $studentId = isset($student) ? $student->getId() : $existingStudent->getId();
+
+            return $this->json([
+                'message' => 'Payment initiated successfully',
+                'clientSecret' => $paymentIntent->client_secret,
+                'studentId' => $studentId,
+            ]);
+        } catch (\Exception $e) {
+            return $this->json(['error' => 'Payment failed: ' . $e->getMessage()], Response::HTTP_BAD_REQUEST);
+        }
     }
+    
          
     #[Route('/signUp/forfait', name: 'api_register_forfait', methods: ['POST'])]
     public function registerForfait(Request $request, EntityManagerInterface $entityManager): JsonResponse
@@ -233,4 +300,97 @@ class RegistrationController extends AbstractController
 
         return new JsonResponse(['message' => 'Status updated successfully']);
     }
+
+
+    #[Route('/total', name: 'api_crud_hour_total', methods: ['GET'])]
+public function TotalTeacher(TeacherRepository $teacherRepository): Response
+{
+    $teachers = $teacherRepository->findAll();
+    $currentTime = new DateTime('now');
+    $total = 0;
+    if (empty($teachers)) {
+        // Handle the case of no teachers found (e.g., return a specific response or log a message)
+        return $this->json(['message' => 'No teachers found in the current month'], Response::HTTP_NOT_FOUND);
+    }
+    foreach ($teachers as $teacher) {
+        // Ensure $teacher->getRegisteredAt() is not null before accessing its properties
+        if ($teacher->getRegisteredAt() !== null) {
+            // Get the date at of the teacher and format it to include only the date component
+            $dateAt = $teacher->getRegisteredAt()->format("Y-m");
+        
+            // Format the current time to include only the date component
+            $currentDate = $currentTime->format("Y-m");
+        
+            // Compare dates (date component only)
+            if ($currentDate === $dateAt) {
+                $total++;
+            }
+        }
+    }
+
+    return $this->json($total, Response::HTTP_OK);
+}
+
+#[Route('/save/{id}', name: 'save_students', methods: ['POST'])]
+public function saveStudents($id, Request $request, EntityManagerInterface $entityManager, StudentRepository $studentRepository): JsonResponse
+{
+    $data = json_decode($request->getContent(), true);
+    $student = $studentRepository->findOneBy(['id' => $id]);
+
+    if (empty($student)) {
+        return new JsonResponse(['error' => 'No student data provided'], 400);
+    }
+
+    $forfaits = $student->getForfait();
+    $type = $forfaits->getSubscription();
+    $courses = $student->getCourse();
+
+    foreach ($courses as $course) {
+        $group = null; // Define $group for each course
+
+        if ($type === 'private') {
+            $group = new Group();
+            $name = "private group" . $course->getType() . $student->getId();
+            $group->setName($name);
+            $group->setType("private");
+            $group->addStudent($student);
+            $group->setAvatar($student->getAvatar());
+            $entityManager->persist($group); // Persist the group for each course
+        } else if ($type === 'public') {
+            $existingGroup = $this->findMatchingGroup($entityManager, $student, $forfaits, $course);
+            if ($existingGroup === null) {
+                $group = new Group();
+                $name = "public group" . $course->getType() . $student->getId();
+                $group->setName($name);
+                $group->setType("public");
+                $group->addStudent($student);
+                $group->setAvatar($student->getAvatar());
+                $entityManager->persist($group); // Persist the group for each course
+            } else {
+                $existingGroup->addStudent($student);
+            }
+        }
+    }
+    $entityManager->flush();
+
+    return new JsonResponse(['message' => 'Groups saved successfully'], 201);
+}
+
+private function findMatchingGroup(EntityManagerInterface $entityManager, $student, $forfaits, $course)
+{
+    $existingGroups = $entityManager->getRepository(Group::class)->findBy(['type' => 'public']);
+    foreach ($existingGroups as $existingGroup) {
+        $groupStudents = $existingGroup->getStudents();
+        foreach ($groupStudents as $groupStudent) {
+            $groupForfaits = $groupStudent->getForfait();
+            $groupCourses = $groupStudent->getCourse();
+            if ($groupForfaits->getId() === $forfaits->getId() && $groupCourses->contains($course)) {
+                return $existingGroup;
+            }
+        }
+    }
+    return null;
+}
+
+
 }

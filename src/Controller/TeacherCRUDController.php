@@ -233,28 +233,6 @@ public function getStudents(int $id): Response
     return $this->json($students, Response::HTTP_OK);
 }
 
-#[Route('/total', name: 'api_crud_hour_total', methods: ['GET'])]
-public function TotalStudent(TeacherRepository $teacherRepository): Response
-{
-    $teachers = $teacherRepository->findAll();
-    $currentTime = new DateTime('now');
-    $total = 0;
-    
-    foreach ($teachers as $teacher) {
-        // Get the date at of the teacher and format it to include only the date component
-        $dateAt = $teacher->getRegisteredAt()->format("Y-m");
-    
-        // Format the current time to include only the date component
-        $currentDate = $currentTime->format("Y-m");
-    
-        // Compare dates (date component only)
-        if ($currentDate === $dateAt) {
-            $total++;
-        }
-    }
-
-    return $this->json($total, Response::HTTP_OK);
-}
 
 #[Route('/total/payment', name: 'api_crud_payment_total', methods: ['GET'])]
 public function TotalPayment(FactureTeacherRepository $factureRepository): Response
@@ -358,4 +336,65 @@ public function TotalAnnulation($id, ReclamationRepository $reclamationRepositor
     return $this->json(['totalAnnulatedReclamations' => $totalAnnulatedReclamations], Response::HTTP_OK);
 }
 
+#[Route('/total/session/count/{id}', name: 'api_crud_session_count', methods: ['GET'])]
+public function SessionCount($id, SessionRepository $sessionRepository): Response
+{
+    $sessions = $sessionRepository->findBy(['teacher' => $id]);
+
+    $totalsessionsC = 0;
+    $totalsessionsNotDone = 0;
+
+    foreach ($sessions as $session) {
+        if ($session->getStatus() === 'done') {
+            $totalsessionsC++;
+        } else {
+            $totalsessionsNotDone++;
+        }
+    }
+
+    return $this->json([
+        'totalsessionsDone' => $totalsessionsC,
+        'totalsessionsNotDone' => $totalsessionsNotDone,
+    ], Response::HTTP_OK);
+}
+
+#[Route('/total/salary/{id}', name: 'api_crud_salary_total', methods: ['GET'])]
+public function TotalSalary($id,FactureTeacherRepository $factureRepository): Response
+{
+    $factures = $factureRepository->findBy(['teacher'=>$id]);
+    $currentTime = new DateTime('now');
+    $total = 0;
+    foreach($factures as $facture){
+        $time = $facture->getDateAt()->format("Y-m");
+        $currentDate = $currentTime->format("Y-m");
+
+        if ($currentDate === $time && $facture->getStatus()==='payed') {
+            $total += $facture->getAmount();
+        }
+    }
+
+    return $this->json(['salary'=>$total], Response::HTTP_OK);
+}
+
+#[Route('/total/facture/count/{id}', name: 'api_crud_facture_count', methods: ['GET'])]
+public function FactureCount($id, FactureTeacherRepository $factureRepository): Response
+{
+    $factures = $factureRepository->findBy(['teacher' => $id]);
+
+    $totalfacturesP = 0;
+    $totalfacturesNotPayed = 0;
+
+    foreach ($factures as $facture) {
+        if ($facture->getStatus() === 'payed') {
+            $totalfacturesP++;
+        } else {
+            $totalfacturesNotPayed++;
+        }
+    }
+
+    return $this->json([
+        'totalfacturesDone' => $totalfacturesP,
+        'totalfacturesNotDone' => $totalfacturesNotPayed,
+    ], Response::HTTP_OK);
+}
 }

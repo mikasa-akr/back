@@ -2,11 +2,12 @@
 
 namespace App\Controller;
 
+use DateTime;
 use App\Entity\Payment;
 use App\Repository\PaymentRepository;
 use App\Repository\SessionRepository;
 use Doctrine\ORM\EntityManagerInterface;
-use DateTime;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -69,6 +70,27 @@ class FactureStudentCRUDController extends AbstractController
             'factures' => $data,
         ];
         return new JsonResponse($responseData, Response::HTTP_OK);
+    }
+
+    #[Route('/update_status/{id}', name: 'update_status', methods: ['PUT'])]
+    public function updateStatus(EntityManagerInterface $entityManager, int $id,Request $request): JsonResponse
+    {
+        $payment = $entityManager->getRepository(Payment::class)->find($id);
+
+        if (!$payment) {
+            return new JsonResponse(['error' => 'payment not found'], 404);
+        }
+
+        $pay = $payment ;
+
+        // Assuming the request body contains the new status
+        $data = json_decode($request->getContent(), true);
+        $status = $data['status'] ?? null;
+
+        $pay->setStatus("payed");
+        $entityManager->flush();
+
+        return new JsonResponse(['message' => 'Status updated successfully']);
     }
     
 }

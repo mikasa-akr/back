@@ -48,62 +48,6 @@ class SessionController extends AbstractController
         return new JsonResponse($data, Response::HTTP_OK);
     }
 
-    #[Route('/teacher/sessions/week/{id}', name: 'api_session_week_teacher', methods: ['GET'])]
-    public function SessionTeacherForWeek($id): JsonResponse
-    {
-        // Get the current date
-        $currentDate = new \DateTime();
-        // Calculate the start and end date of the current week
-        $startOfWeek = $currentDate->modify('this week')->format('Y-m-d');
-        $endOfWeek = $currentDate->modify('this week +6 days')->format('Y-m-d');
-    
-        // Find sessions for the teacher within the current week
-        $sessions = $this->sessionRepository->findSessionsForWeek($id, $startOfWeek, $endOfWeek);
-        $data = [];
-        foreach ($sessions as $session) {
-            if ($session->getStatus() === 'canceled session') {
-                continue; // Skip canceled sessions
-            }
-            $data[] = [
-                'id' => $session->getId(),
-                'date_seance' => $session->getDateSeance() ? $session->getDateSeance()->format('Y-m-d') : null,
-                'time_start' => $session->getTimeStart() ? $session->getTimeStart()->format('H:i') : null,
-                'status' => $session->getStatus(),
-                'time_end' => $session->getTimeEnd() ? $session->getTimeEnd()->format('H:i') : null,
-                'visibility' => $session->isVisibility(),
-                'groupe_seance_id' => $session->getGroupeSeanceId()->getType(),
-                'seance_course_id' => $session->getSeanceCourse()->getType(),
-            ];
-        }
-    
-        return new JsonResponse($data, Response::HTTP_OK);
-    }
-    
-#[Route('/student/sessions/week/{id}', name: 'api_session_week_student', methods: ['GET'])]
-public function SessionStudentForWeek($id): JsonResponse
-{
-    $currentDate = new \DateTime();
-    $startOfWeek = $currentDate->modify('this week')->format('Y-m-d');
-    $endOfWeek = $currentDate->modify('this week +6 days')->format('Y-m-d');
-    $sessions = $this->sessionRepository->findStudentSessionsForWeek($id, $startOfWeek, $endOfWeek);
-    $data = [];
-    foreach ($sessions as $session) {
-    if($session->getStatus() === 'canceled session'){
-        continue;
-        }
-        $data[] = [
-            'id' => $session->getId(),
-            'date_seance' => $session->getDateSeance() ? $session->getDateSeance()->format('Y-m-d') : null,
-            'time_start' => $session->getTimeStart() ? $session->getTimeStart()->format('H:i') : null,
-            'status' => $session->getStatus(),
-            'time_end' => $session->getTimeEnd() ? $session->getTimeEnd()->format('H:i') : null,
-            'visibility' => $session->isVisibility(),
-            'groupe_seance_id' => $session->getGroupeSeanceId()->getType(),
-            'seance_course_id' => $session->getSeanceCourse()->getType(),
-        ];
-    }
-    return new JsonResponse($data, Response::HTTP_OK);
-}
 
 #[Route('/student/{id}', name: 'api_crud_session_student', methods: ['GET'])]
 public function sessionStudent($id, StudentRepository $studentRepository): JsonResponse

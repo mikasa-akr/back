@@ -87,11 +87,11 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: FactureTeacher::class, mappedBy: 'teacher')]
     private Collection $factureTeachers;
 
-    #[ORM\Column(length: 255)]
-    private ?string $cardNumber = null;
-
     #[ORM\OneToMany(targetEntity: Group::class, mappedBy: 'teach')]
     private Collection $groupes;
+
+    #[ORM\OneToMany(targetEntity: Notification::class, mappedBy: 'teacher')]
+    private Collection $notifications;
 
     public function __construct()
     {
@@ -100,6 +100,7 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
         $this->reclamations = new ArrayCollection();
         $this->factureTeachers = new ArrayCollection();
         $this->groupes = new ArrayCollection();
+        $this->notifications = new ArrayCollection();
         
     }
 
@@ -411,18 +412,6 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getCardNumber(): ?string
-    {
-        return $this->cardNumber;
-    }
-
-    public function setCardNumber(string $cardNumber): static
-    {
-        $this->cardNumber = $cardNumber;
-
-        return $this;
-    }
-
     /**
      * @return Collection<int, Group>
      */
@@ -447,6 +436,36 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
             // set the owning side to null (unless already changed)
             if ($groupe->getTeach() === $this) {
                 $groupe->setTeach(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Notification>
+     */
+    public function getNotifications(): Collection
+    {
+        return $this->notifications;
+    }
+
+    public function addNotification(Notification $notification): static
+    {
+        if (!$this->notifications->contains($notification)) {
+            $this->notifications->add($notification);
+            $notification->setTeacher($this);
+        }
+
+        return $this;
+    }
+
+    public function removeNotification(Notification $notification): static
+    {
+        if ($this->notifications->removeElement($notification)) {
+            // set the owning side to null (unless already changed)
+            if ($notification->getTeacher() === $this) {
+                $notification->setTeacher(null);
             }
         }
 

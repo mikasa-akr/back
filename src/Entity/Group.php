@@ -2,10 +2,10 @@
 
 namespace App\Entity;
 
-use App\Repository\GroupRepository;
-use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Repository\GroupRepository;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\Common\Collections\ArrayCollection;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: GroupRepository::class)]
@@ -19,12 +19,15 @@ class Group
     private ?int $id = null;
 
     #[ORM\OneToMany(mappedBy: 'groupe_seance', targetEntity: Session::class)]
+    #[Groups(['group_sessions'])] 
     private Collection $sessions;
 
     #[ORM\ManyToMany(targetEntity: Teacher::class, inversedBy: 'groupeT')]
+    #[Groups(['group_list'])]
     private Collection $teachers;
 
     #[ORM\ManyToMany(targetEntity: Student::class, inversedBy: 'groupe', cascade: ['persist'])]
+    #[Groups(['group_list'])]
     private ?Collection $students = null;
 
     #[ORM\Column(length: 255)]
@@ -33,6 +36,12 @@ class Group
 
     #[ORM\ManyToOne(inversedBy: 'groupes')]
     private ?Teacher $teach = null;
+
+    #[ORM\Column(length: 255)]
+    private ?string $name = null;
+
+    #[ORM\Column(length: 255)]
+    private ?string $avatar = null;
 
 
 
@@ -166,6 +175,30 @@ class Group
     public function setTeach(?Teacher $teach): static
     {
         $this->teach = $teach;
+
+        return $this;
+    }
+
+    public function getName(): ?string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+    public function getAvatar(): ?string
+    {
+        return $this->avatar;
+    }
+
+    public function setAvatar(string $avatar): static
+    {
+        $this->avatar = $avatar;
 
         return $this;
     }

@@ -37,7 +37,9 @@ class AuthenticationSuccessListener
             'id' => $user->getId(),
             'first_name'=>$user->getFirstName(),
             'status'=>$user->getPaymentStatus(),
-            'last_name' => $user->getLastName()
+            'last_name' => $user->getLastName(),
+            'email' => $user->getUserIdentifier(),
+
         );
         $event->setData($data);
     }

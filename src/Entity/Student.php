@@ -7,6 +7,7 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Repository\StudentRepository;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -27,6 +28,7 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
         $this->groupe = new ArrayCollection();
         $this->reclamations = new ArrayCollection();
         $this->payments = new ArrayCollection();
+        $this->notifications = new ArrayCollection();
     }
     public function getAge(): ?string
     {
@@ -85,6 +87,7 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $avatar;
 
     #[ORM\ManyToMany(targetEntity: Course::class, inversedBy: 'students')]
+    #[Groups(["exclude_course"])]
     private Collection $course;
 
     #[ORM\ManyToMany(targetEntity: Group::class, mappedBy: 'students')]
@@ -104,6 +107,9 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $dateAt = null;
+
+    #[ORM\OneToMany(targetEntity: Notification::class, mappedBy: 'student')]
+    private Collection $notifications;
 
     
      /**
@@ -423,6 +429,36 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
     public function setDateAt(\DateTimeInterface $dateAt): static
     {
         $this->dateAt = $dateAt;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Notification>
+     */
+    public function getNotifications(): Collection
+    {
+        return $this->notifications;
+    }
+
+    public function addNotification(Notification $notification): static
+    {
+        if (!$this->notifications->contains($notification)) {
+            $this->notifications->add($notification);
+            $notification->setStudent($this);
+        }
+
+        return $this;
+    }
+
+    public function removeNotification(Notification $notification): static
+    {
+        if ($this->notifications->removeElement($notification)) {
+            // set the owning side to null (unless already changed)
+            if ($notification->getStudent() === $this) {
+                $notification->setStudent(null);
+            }
+        }
 
         return $this;
     }
