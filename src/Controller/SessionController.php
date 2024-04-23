@@ -85,12 +85,11 @@ public function registerSession(Request $request, EntityManagerInterface $entity
     if (null === $data) {
         return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
     }
-    $visibility = $data['visibility'] ?? null;
     $dataSeanceS = $data['date_seance'] ?? null;
     $timeStartS = $data['time_start'] ?? null;
     $dataSeance = new DateTime($dataSeanceS);
     $timeStart = new DateTime($timeStartS);
-
+    
     if (!empty($data['groupe_id'])) {
         $groupId = $data['groupe_id'];
         $group = $entityManager->getRepository(Group::class)->find($groupId);
@@ -126,7 +125,7 @@ public function registerSession(Request $request, EntityManagerInterface $entity
 
     $session = new Session();
     $session->setStatus("active");
-    $session->setVisibility($visibility);
+    $session->setVisibility(0);
     $session->setDateSeance($dataSeance);
     $session->setTimeStart($timeStart);
     $session->setTimeEnd($timeEnd);
@@ -139,6 +138,88 @@ public function registerSession(Request $request, EntityManagerInterface $entity
 
     return $this->json(['message' => 'session registered successfully'], Response::HTTP_CREATED);
 }
+
+#[Route('/autoRegisterSessions', name: 'api_auto_register_sessions', methods: ['POST'])]
+public function autoRegisterSessions(Request $request, EntityManagerInterface $entityManager): JsonResponse
+{
+    $data = json_decode($request->getContent(), true);
+
+    if (null === $data) {
+        return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
+    }
+
+    $dataSeanceS = $data['date_seance'] ?? null;
+    $timeStartS = $data['time_start'] ?? null;
+    $dataSeance = new DateTime($dataSeanceS);
+    $timeStart = new DateTime($timeStartS);
+
+    if (!isset($data['groupe_id'])) {
+        return $this->json(['error' => 'Group ID is required'], Response::HTTP_BAD_REQUEST);
+    }
+
+    $groupId = $data['groupe_id'];
+    $group = $entityManager->getRepository(Group::class)->find($groupId);
+
+    if (!$group) {
+        return $this->json(['error' => 'Group not found'], Response::HTTP_NOT_FOUND);
+    }
+
+    $firstStudent = $group->getStudents()->first();
+
+    if (!$firstStudent) {
+        return $this->json(['error' => 'No students found in the group'], Response::HTTP_NOT_FOUND);
+    }
+
+    $forfait = $firstStudent->getForfait();
+
+    if (!$forfait) {
+        return $this->json(['error' => 'Forfait not found for the first student in the group'], Response::HTTP_NOT_FOUND);
+    }
+
+    $nmber = $forfait->getNbrHourSession();
+    $nb = $forfait->getNbrHourSeance();
+
+    $day= $nmber / $nb;
+
+    // Get necessary details from the group, e.g., teacher, course, etc.
+    $teacher = $group->getTeach();
+    // Fetch other required data as needed
+    $course = $teacher->getCourse(); 
+
+    // Calculate the end time based on the provided number of hours per session
+    $interval = new DateInterval('PT' . $nb . 'H');
+    $timeEnd = clone $timeStart;
+    $timeEnd->add($interval);
+
+    $sessions = [];
+
+    for ($i = 0; $i < $day; $i++) {
+        // Calculate the date for each session (e.g., weekly on the same day)
+        $dateSeance = (clone $dataSeance)->modify('+' . $i . ' week')->format('Y-m-d');
+
+        $session = new Session();
+        $session->setStatus("active");
+        $session->setVisibility(0);
+        $session->setDateSeance(new DateTime($dateSeance));
+        $session->setTimeStart($timeStart);
+        $session->setTimeEnd($timeEnd);
+        $entityManager->persist($session);
+        $session->setSeanceCourse($course);
+        $session->setTeacher($teacher);
+        $session->setGroupeSeanceId($group);
+
+        $sessions[] = [
+            'date_seance' => $dateSeance,
+            'start_time' => $timeStart->format('H:i'),
+            'end_time' => $timeEnd->format('H:i'),
+        ];
+    }
+
+    $entityManager->flush();
+
+    return $this->json(['sessions' => $sessions, 'message' => 'Sessions registered successfully'], Response::HTTP_CREATED);
+}
+
 
 #[Route('/', name: 'api_crud_session_index', methods: ['GET'])]
 public function index(): JsonResponse

@@ -80,8 +80,6 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 255)]
     private ?string $number;
 
-    #[ORM\Column(length: 255)]
-    private ?string $gender;
 
     #[ORM\Column(length: 255)]
     private ?string $avatar;
@@ -110,6 +108,9 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\OneToMany(targetEntity: Notification::class, mappedBy: 'student')]
     private Collection $notifications;
+
+    #[ORM\ManyToOne(inversedBy: 'student')]
+    private ?Gender $genders = null;
 
     
      /**
@@ -226,19 +227,10 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
 
         return $this;
     }
-
-    public function getGender(): ?string
-    {
-        return $this->gender;
-    }
-
-    public function setGender(string $gender): static
-    {
-        $this->gender = $gender;
-
-        return $this;
-    }
-
+    
+    /**
+     * @see UserInterface
+     */
     public function getAvatar(): ?string
     {
         return $this->avatar;
@@ -459,6 +451,18 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
                 $notification->setStudent(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getGender(): ?Gender
+    {
+        return $this->genders;
+    }
+
+    public function setGender(?Gender $genders): static
+    {
+        $this->genders = $genders;
 
         return $this;
     }

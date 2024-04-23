@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use DateTime;
 use App\Entity\Course;
+use App\Entity\Gender;
 use App\Entity\Forfait;
 use App\Entity\Payment;
 use App\Entity\Student;
@@ -52,13 +53,14 @@ class StudentCRUDController extends AbstractController
                 'lastName'=> $student->getLastName(),
                 'email'=> $student->getEmail(),
                 'avatar'=> $student->getAvatar(),
-                'gender'=> $student->getGender(),
+                'gender'=> $student->getGender()->getName(),
                 'number'=> $student->getNumber(),
                 'age'=> $student->getAge(),
                 'status'=> $student->getStatus(),
                 'forfait_id' => $student->getForfait()->getTitle(),
                 'subscription' => $student->getForfait()->getSubscription(),
                 'course_types' => $courseTypes,
+                'gender_id' => $student->getGender()->getId()
             ];
         }
     
@@ -87,7 +89,7 @@ class StudentCRUDController extends AbstractController
             'lastName' => $student->getLastName(),
             'email' => $student->getEmail(),
             'avatar' => $student->getAvatar(),
-            'gender' => $student->getGender(),
+            'gender' => $student->getGender()->getName(),
             'number' => $student->getNumber(),
             'age' => $student->getAge(),
             'status' => $student->getStatus(),
@@ -110,7 +112,6 @@ class StudentCRUDController extends AbstractController
         empty($data['lastName']) ? true : $student->setLastName($data['lastName']);
         empty($data['email']) ? true : $student->setEmail($data['email']);
         empty($data['avatar']) ? true : $student->setAvatar($data['avatar']);
-        empty($data['gender']) ? true : $student->setGender($data['gender']);
         empty($data['number']) ? true : $student->setNumber($data['number']);
         empty($data['password']) ? true : $student->setPassword($data['password']);
         empty($data['age']) ? true : $student->setAge($data['age']);
@@ -123,6 +124,15 @@ class StudentCRUDController extends AbstractController
             }
             $student->setForfait($forfait);
         }
+
+        if (!empty($data['gender'])) {
+            $genderId = $data['gender'];
+            $gender = $entityManager->getRepository(Gender::class)->find($genderId);
+            if (!$gender) {
+                return new JsonResponse(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
+            }
+            $student->setForfait($gender);
+        }        
 
         if (!empty($data['course_id'])) {
             $courseId = $data['course_id'];
@@ -148,23 +158,33 @@ class StudentCRUDController extends AbstractController
 
     #[Route('/Groupes/{id}', name: 'teacher_groups', methods: ['GET'])]
     public function getGroups(int $id, EntityManagerInterface $entityManager, SerializerInterface $serializer): Response
-{
-    // Find the teacher by ID
-    $student = $this->studentRepository->findOneBy(['id' => $id]);
-    if (!$student) {
-        return $this->json(['error' => 'student not found'], Response::HTTP_NOT_FOUND);
+    {
+        // Find the teacher by ID
+        $student = $this->studentRepository->findOneBy(['id' => $id]);
+        if (!$student) {
+            return $this->json(['error' => 'student not found'], Response::HTTP_NOT_FOUND);
+        }
+    
+        // Get all groups associated with the student
+        $groups = $student->getGroupe();
+    
+        // Serialize each group along with the required information
+        $serializedGroups = [];
+        foreach ($groups as $group) {
+            $serializedGroups[] = [
+                'id' => $group->getId(),
+                'avatar' => $group->getAvatar(),
+                'type' => $group->getType(),      
+                'name' => $group->getName(),
+                'teacher' =>$group->getTeach()->getEmail(),      
+            ];
+        }
+    
+        // Serialize the groups
+        $data = $serializer->serialize($serializedGroups, 'json');
+    
+        return new JsonResponse($data, Response::HTTP_OK, [], true);
     }
-
-    // Get all groups associated with the student
-    $groups = $student->getGroupe();
-
-    // Serialize the groups
-    $data = $serializer->serialize($groups, 'json', [
-        'groups' => ['group_list'],
-    ]);
-
-    return new JsonResponse($data, Response::HTTP_OK, [], true);
-}
 
 #[Route('/restHour/{id}', name: 'api_crud_hour_rest', methods: ['GET'])]
 public function restHours($id, StudentRepository $studentRepository, EntityManagerInterface $entityManager): Response
@@ -191,29 +211,6 @@ public function restHours($id, StudentRepository $studentRepository, EntityManag
     }
     $restHour = $forfait - $totalDifference;
     return $this->json($restHour, Response::HTTP_OK);
-}
-
-#[Route('/total', name: 'api_crud_hour_total', methods: ['GET'])]
-public function TotalStudent(StudentRepository $studentRepository): Response
-{
-    $students = $studentRepository->findAll();
-    $currentTime = new DateTime('now');
-    $total = 0;
-    
-    foreach ($students as $student) {
-        // Get the date at of the student and format it to include only the date component
-        $dateAt = $student->getDateAt()->format("Y-m");
-    
-        // Format the current time to include only the date component
-        $currentDate = $currentTime->format("Y-m");
-    
-        // Compare dates (date component only)
-        if ($currentDate === $dateAt) {
-            $total++;
-        }
-    }
-
-    return $this->json($total, Response::HTTP_OK);
 }
 
 #[Route('/total/payment', name: 'api_crud_payment_total', methods: ['GET'])]
@@ -257,15 +254,17 @@ public function TotalSession($id): Response
 #[Route('/total/session/count/{id}', name: 'api_crud_session_count', methods: ['GET'])]
 public function SessionCount($id, SessionRepository $sessionRepository): Response
 {
-    $sessions = $sessionRepository->findBy(['teacher' => $id]);
-
+    $students = $this->studentRepository->findOneBy(['id' => $id]);
     $totalsessionsC = 0;
-
+    $groups = $students->getGroupe();
+foreach($groups as $group){
+    $sessions = $group->getSessions();
     foreach ($sessions as $session) {
         if ($session->getStatus() === 'done') {
             $totalsessionsC++;
         }
     }
+}
 
     return $this->json([
         'totalsessionsDone' => $totalsessionsC,

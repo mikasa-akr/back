@@ -272,5 +272,27 @@ class ReclamationCRUDController extends AbstractController
     
         return new JsonResponse($data, Response::HTTP_OK);
     }
+
+
+    #[Route('/teacher/annulation/{id}', name: 'api_crud_annulation_teacher', methods: ['GET'])]
+    public function TeacherAnnulation($id): JsonResponse
+    {   
+        $reclamations = $this->reclamationRepository->findBy(['teacher' => $id , 'status' => 'annulated']);
+        $data = [];
+    
+        foreach ($reclamations as $reclamation) {
+            $data[] = [
+                'id' => $reclamation->getId(),
+                'type' => $reclamation->getType(),
+                'status' => $reclamation->getStatus(),
+                'teacher_id' => $reclamation->getTeacher() ? $reclamation->getTeacher()->getId() : null,
+                'student_id' => $reclamation->getStudent() ? $reclamation->getStudent()->getId() : null,
+                'reason' => $reclamation->getReason(),
+                'time' => $reclamation->getTime() ? $reclamation->getTime()->format('Y-m-d H:i:s') : null,
+            ];
+        }
+    
+        return new JsonResponse($data, Response::HTTP_OK);
+    }
     
 }

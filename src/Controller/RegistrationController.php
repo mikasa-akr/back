@@ -6,13 +6,14 @@ use DateTime;
 use Stripe\Stripe;
 use App\Entity\Group;
 use App\Entity\Course;
+use App\Entity\Gender;
 use App\Entity\Forfait;
 use App\Entity\Payment;
 use App\Entity\Student;
 use App\Entity\Teacher;
+use Psr\Log\LoggerInterface;
 use App\Repository\StudentRepository;
 use App\Repository\TeacherRepository;
-use Psr\Log\LoggerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
 use Stripe\Exception\InvalidRequestException;
@@ -45,7 +46,6 @@ class RegistrationController extends AbstractController
         $firstName = $request->request->get('first_name');
         $lastName = $request->request->get('last_name');
         $number =$request->request->get('number');
-        $gender = $request->request->get('gender');
         $registeredAt=new DateTime('now');
         $avatarFile = $request->files->get('avatar');
 
@@ -59,6 +59,12 @@ class RegistrationController extends AbstractController
         $course = $entityManager->getRepository(Course::class)->find($courseId);
         if (!$course) {
             return $this->json(['error' => 'course not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $genderId = $request->request->get('gender_id');
+        $gender = $entityManager->getRepository(Gender::class)->find($genderId);
+        if (!$gender) {
+            return $this->json(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
         }
     
         $teacher = new Teacher();
@@ -90,7 +96,6 @@ class RegistrationController extends AbstractController
         $lastName = $request->request->get('lastName');
         $email = $request->request->get('email');
         $number = $request->request->get('number');
-        $gender = $request->request->get('gender');
         $age = $request->request->get('age');
         $avatarFile = $request->files->get('avatar');
         $dateAt = new \DateTime('now');
@@ -117,7 +122,12 @@ class RegistrationController extends AbstractController
         if (!$courseIds) {
             return $this->json(['error' => 'course IDs are required'], Response::HTTP_BAD_REQUEST);
         }
-        
+
+        $genderId = $request->request->get('gender_id');
+        $gender = $entityManager->getRepository(Gender::class)->find($genderId);
+        if (!$gender) {
+            return $this->json(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
+        }
         // Retrieve course entities
         $courses = [];
         foreach ($courseIds as $courseId) { // Iterate through decoded array
@@ -279,6 +289,21 @@ class RegistrationController extends AbstractController
         return new JsonResponse($formattedCourses, Response::HTTP_OK);
     }
 
+    #[Route('/gender', name: 'api_genders', methods: ['GET'])]
+    public function getGenders( EntityManagerInterface $entityManager): JsonResponse
+    {
+        $genders = $entityManager->getRepository(Gender::class)->findAll();
+
+        $formattedgenders = [];
+        foreach ($genders as $gender) {
+            $formattedgenders[] = [
+                'id' => $gender->getId(),
+                'name' => $gender->getName(),
+            ];
+        }
+        return new JsonResponse($formattedgenders, Response::HTTP_OK);
+    }
+
     #[Route('/update_status/{id}', name: 'update_status', methods: ['PUT'])]
     public function updateStatus(EntityManagerInterface $entityManager, int $id,Request $request): JsonResponse
     {
@@ -330,67 +355,5 @@ public function TotalTeacher(TeacherRepository $teacherRepository): Response
 
     return $this->json($total, Response::HTTP_OK);
 }
-
-#[Route('/save/{id}', name: 'save_students', methods: ['POST'])]
-public function saveStudents($id, Request $request, EntityManagerInterface $entityManager, StudentRepository $studentRepository): JsonResponse
-{
-    $data = json_decode($request->getContent(), true);
-    $student = $studentRepository->findOneBy(['id' => $id]);
-
-    if (empty($student)) {
-        return new JsonResponse(['error' => 'No student data provided'], 400);
-    }
-
-    $forfaits = $student->getForfait();
-    $type = $forfaits->getSubscription();
-    $courses = $student->getCourse();
-
-    foreach ($courses as $course) {
-        $group = null; // Define $group for each course
-
-        if ($type === 'private') {
-            $group = new Group();
-            $name = "private group" . $course->getType() . $student->getId();
-            $group->setName($name);
-            $group->setType("private");
-            $group->addStudent($student);
-            $group->setAvatar($student->getAvatar());
-            $entityManager->persist($group); // Persist the group for each course
-        } else if ($type === 'public') {
-            $existingGroup = $this->findMatchingGroup($entityManager, $student, $forfaits, $course);
-            if ($existingGroup === null) {
-                $group = new Group();
-                $name = "public group" . $course->getType() . $student->getId();
-                $group->setName($name);
-                $group->setType("public");
-                $group->addStudent($student);
-                $group->setAvatar($student->getAvatar());
-                $entityManager->persist($group); // Persist the group for each course
-            } else {
-                $existingGroup->addStudent($student);
-            }
-        }
-    }
-    $entityManager->flush();
-
-    return new JsonResponse(['message' => 'Groups saved successfully'], 201);
-}
-
-private function findMatchingGroup(EntityManagerInterface $entityManager, $student, $forfaits, $course)
-{
-    $existingGroups = $entityManager->getRepository(Group::class)->findBy(['type' => 'public']);
-    foreach ($existingGroups as $existingGroup) {
-        $groupStudents = $existingGroup->getStudents();
-        foreach ($groupStudents as $groupStudent) {
-            $groupForfaits = $groupStudent->getForfait();
-            $groupCourses = $groupStudent->getCourse();
-            if ($groupForfaits->getId() === $forfaits->getId() && $groupCourses->contains($course)) {
-                return $existingGroup;
-            }
-        }
-    }
-    return null;
-}
-
 
 }

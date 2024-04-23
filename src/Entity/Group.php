@@ -35,15 +35,19 @@ class Group
     private ?string $type = null;
 
     #[ORM\ManyToOne(inversedBy: 'groupes')]
+    #[Groups(['group_list'])]
     private ?Teacher $teach = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['group_list'])]
     private ?string $name = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['group_list'])]
     private ?string $avatar = null;
 
-
+    #[ORM\ManyToOne(inversedBy: 'groupes')]
+    private ?Gender $gender = null;
 
     public function __construct()
     {
@@ -199,6 +203,18 @@ class Group
     public function setAvatar(string $avatar): static
     {
         $this->avatar = $avatar;
+
+        return $this;
+    }
+
+    public function getGender(): ?Gender
+    {
+        return $this->gender;
+    }
+
+    public function setGender(?Gender $gender): static
+    {
+        $this->gender = $gender;
 
         return $this;
     }

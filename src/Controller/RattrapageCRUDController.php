@@ -101,7 +101,7 @@ class RattrapageCRUDController extends AbstractController
         return $this->json(['message' => 'Rattrapage created successfully']);
     }
 
-    #[Route('/vote/{id}', name: 'api_rattrapage_create', methods: ['POST'])]
+    #[Route('/vote/{id}', name: 'api_rattrapage', methods: ['POST'])]
     public function saveVote($id, Request $request, EntityManagerInterface $entityManager): Response
     {
         $data = json_decode($request->getContent(), true);
@@ -111,7 +111,6 @@ class RattrapageCRUDController extends AbstractController
         if (!$session) {
             return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
         }
-        
         // Save vote for the session
         $vote = new Vote();
         $vote->setDate(new \DateTime('now'));
@@ -138,41 +137,57 @@ class RattrapageCRUDController extends AbstractController
         if (!$student) {
             return new JsonResponse(['error' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
         }
+        
         $sessions = [];
         $groups = $student->getGroupe();
+        
         foreach ($groups as $group) {
             $sessions[] = $group->getSessions();
         }
+        
         // Extract necessary information from sessions
         $info = [];
+        $currentTime = new \DateTime('now');
+        
         foreach ($sessions as $session) {
             foreach ($session as $s) {
                 $teacher = $s->getTeacher();
                 $nameF = $teacher->getFirstName();
                 $nameL = $teacher->getLastName();
                 $rattrapages = $s->getRattrapages(); // Retrieve all rattrapages related to this session
+                
                 foreach ($rattrapages as $rattrapage) {
-                    $sessionR = $session;
                     $dateR = $rattrapage->getDate();
-                    $dateAtR= $rattrapage->getDateAt();
-                    $sessionId = $s->getId();
+                    $dateAtR = $rattrapage->getDateAt();
                     $timeR = $rattrapage->getTime();
-                    $currentTime = new \DateTime('now');
                     $dateS = $s->getDateSeance();
                     $timeS = $s->getTimeStart();
+                    
                     $sessionDateTime = new \DateTime($dateS->format('Y-m-d') . ' ' . $timeS->format('H:i:s'));
                     $rattrapageDateTime = new \DateTime($dateR->format('Y-m-d') . ' ' . $timeR->format('H:i:s'));
-                $info[] = [
-                    'nameF' => $nameF,
-                    'nameL' => $nameL,
-                    'sessionDate' => $sessionDateTime,
-                    'rattrapageDate' => $rattrapageDateTime,
-                    'sessionId' => $sessionId,
-                    'dateAtR' => $dateAtR,
-                ];
-            }
+                    
+                    // Calculate time difference in hours
+                    $timeDiff = $currentTime->diff($dateAtR);
+                    $diffHours = $timeDiff->h + ($timeDiff->days * 24);
+                    
+                    // Check if the time difference is less than or equal to 3 hours
+                    if ($diffHours <= 3) {
+                        $sessionId = $s->getId();
+                        $info[] = [
+                            'nameF' => $nameF,
+                            'nameL' => $nameL,
+                            'sessionDate' => $sessionDateTime->format('Y-m-d H:i:s'),
+                            'rattrapageDate' => $rattrapageDateTime->format('Y-m-d H:i:s'),
+                            'sessionId' => $sessionId,
+                            'dateAtR' => $dateAtR->format('Y-m-d H:i:s'),
+                        ];
+                    }
+                }
             }
         }
+        
         return new JsonResponse($info);
     }
+    
+    
 }

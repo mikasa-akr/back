@@ -5,17 +5,18 @@ namespace App\Controller;
 use DateTime;
 use App\Entity\Group;
 use App\Entity\Course;
-use App\Entity\FactureTeacher;
+use App\Entity\Gender;
 use App\Entity\Teacher;
-use App\Repository\ExpensesRepository;
-use App\Repository\FactureTeacherRepository;
+use App\Entity\FactureTeacher;
 use App\Repository\GroupRepository;
 use App\Repository\PaymentRepository;
-use App\Repository\ReclamationRepository;
 use App\Repository\SessionRepository;
 use App\Repository\TeacherRepository;
+use App\Repository\ExpensesRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Repository\ReclamationRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use App\Repository\FactureTeacherRepository;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -45,11 +46,12 @@ class TeacherCRUDController extends AbstractController
             'lastName'=> $teacher->getLastName(),
             'email'=> $teacher->getEmail(),
             'avatar'=> $teacher->getAvatar(),
-            'gender'=> $teacher->getGender(),
+            'gender'=> $teacher->getGender()->getName(),
             'number'=> $teacher->getNumber(),
             'status'=> $teacher->getStatus(),
             'registered_at'=> $teacher->getRegisteredAt(),
-            'course_name'=> $teacher->getCourse()->getType()
+            'course_name'=> $teacher->getCourse()->getType(),
+            'gender_id' => $teacher->getGender()->getId()
 
         ];
     }
@@ -67,7 +69,7 @@ class TeacherCRUDController extends AbstractController
         'lastName'=> $teacher->getLastName(),
         'email'=> $teacher->getEmail(),
         'avatar'=> $teacher->getAvatar(),
-        'gender'=> $teacher->getGender(),
+        'gender'=> $teacher->getGender()->getName(),
         'number'=> $teacher->getNumber(),
         'status'=> $teacher->getStatus(),
         'registered_at'=> $teacher->getRegisteredAt(),
@@ -92,7 +94,6 @@ class TeacherCRUDController extends AbstractController
         $teacher->setLastName($data['lastName'] ?? $teacher->getLastName());
         $teacher->setEmail($data['email'] ?? $teacher->getEmail());
         $teacher->setAvatar($data['avatar'] ?? $teacher->getAvatar());
-        $teacher->setGender($data['gender'] ?? $teacher->getGender());
         $teacher->setNumber($data['number'] ?? $teacher->getNumber());
         $teacher->setPassword($data['password'] ?? $teacher->getPassword());
     
@@ -105,6 +106,15 @@ class TeacherCRUDController extends AbstractController
             }
             $teacher->setCourse($course);
         }
+
+        if (!empty($data['gender'])) {
+            $genderId = $data['gender'];
+            $gender = $entityManager->getRepository(Gender::class)->find($genderId);
+            if (!$gender) {
+                return new JsonResponse(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
+            }
+            $teacher->setGender($gender);
+        }  
     
         // Persist changes to the teacher entity
         $entityManager->persist($teacher);
@@ -221,11 +231,16 @@ public function getStudents(int $id): Response
         $groupStudents = $group->getStudents();
 
         foreach ($groupStudents as $student) {
+foreach( $student->getGroupe() as $g){
+$name = $g->getName();
+}
             $students[] = [
                 'id' => $student->getId(),
                 'firstName' => $student->getFirstName(),
                 'lastName' => $student->getLastName(),
-                
+                'avatar' => $student->getAvatar(),
+                'group' =>$name,
+                'email' => $student->getEmail()
             ];
         }
     }

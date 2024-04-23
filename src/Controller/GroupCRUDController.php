@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\Gender;
 use App\Entity\Group;
 use App\Entity\Student;
 use App\Entity\Teacher;
@@ -47,13 +48,15 @@ class GroupCRUDController extends AbstractController
                 'teacher_last' => $group->getTeach()->getLastName(),
                 'student_id' => $students,
                 'name'=>$group->getName(),
-                'avatar'=>$group->getAvatar()
+                'avatar'=>$group->getAvatar(),
+                'gender' => $group->getGender()->getName(),
+                'gender_id' => $group->getGender()->getId()
+
             ];
         }
     
         return new JsonResponse($data, Response::HTTP_OK);
     }
-    
 
     #[Route('/{id}', name: 'api_crud_group_show', methods: ['GET'])]
     public function show($id): JsonResponse
@@ -125,100 +128,65 @@ class GroupCRUDController extends AbstractController
         return new JsonResponse(null, Response::HTTP_NO_CONTENT);
     }
 
-    #[Route('/Group/student/add/{id}', name: 'group_student_add', methods: ['POST'])]
-    public function addStudent(int $id, EntityManagerInterface $entityManager, StudentRepository $studentRepository, GroupRepository $groupRepository): Response
-    {
-        // Find the student by ID
-        $student = $studentRepository->find($id);
-        if (!$student) {
-            return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
-        }
-        
-        $forfaitType = $student->getForfait()->getSubscription();
-        $courses = $student->getCourse();
-        $payStatus = $student->getPaymentStatus();
-        
-        if ($payStatus === 'payed') {
-            foreach ($courses as $course) {
-                if ($forfaitType === 'private') {
-                    $group = new Group();
-                    $group->setType('private');
-                    $group->addStudent($student);
-                    $entityManager->persist($group);
-                } else {
-                    $existingGroups = $groupRepository->findBy(['type' => 'public']);
-                    $isAdded = false;
-                    
-                    // Check if any existing public group matches forfait_id and course_id
-                    foreach ($existingGroups as $existingGroup) {
-                        $existingStudents = $existingGroup->getStudents();
-                        foreach ($existingStudents as $existingStudent) {
-                            $existingCourses = $existingStudent->getCourse();
-                            foreach ($existingCourses as $existingCourse) {
-                                if ($existingStudent->getForfait()->getId() === $student->getForfait()->getId() && $existingCourse->getId() === $course->getId()) {
-                                    $existingGroup->addStudent($student);
-                                    $isAdded = true;
-                                    break 3;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (!$isAdded) {
-                        $group = new Group();
-                        $group->setType('public');
-                        $group->addStudent($student);
-                        $entityManager->persist($group);
-                    }
-                }
-            }
-        }
-        
-        $entityManager->flush();
-        
-        return new JsonResponse(['message' => 'Student added to groups successfully'], Response::HTTP_OK);
-    }
-
     #[Route('/signUp/group', name: 'api_register_group', methods: ['POST'])]
     public function registerGroup(Request $request, EntityManagerInterface $entityManager): JsonResponse
     {
-
-        $data = json_decode($request->getContent(), true);
-        if (null === $data) {
-            return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
-        }
-        $type = $data['type'] ?? null;
+    
+        $type = $request->request->get('type');
+        $name = $request->request->get('name');
+        $avatarFile = $request->files->get('avatar');
         $group = new Group();
-
-        if (!empty($data['teacherId'])) {
-            $teacherId = $data['teacherId'];
+    
+        $avatarFileName = null;
+        if ($avatarFile) {
+            // Move uploaded file to a directory
+            $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
+            $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
+        }
+    
+        // Fetch teacher by teacher_id if provided
+        $teacherId = $request->request->get('teacher_id');
+        if (!empty($teacherId)) {
             $teacher = $entityManager->getRepository(Teacher::class)->find($teacherId);
             if (!$teacher) {
-                return new JsonResponse(['error' => 'teacher not found'], Response::HTTP_NOT_FOUND);
+                return new JsonResponse(['error' => 'Teacher not found'], Response::HTTP_NOT_FOUND);
             }
             $group->setTeach($teacher);
         }
-        if (array_key_exists('studentId', $data) && is_string($data['studentId'])) {
-            // Extract individual IDs from the string
-            $studentIdArray = explode(' ', $data['studentId']);
-            // Trim quotes and convert to integers if necessary
-            $studentIdArray = array_map(function($id) {
-                return trim($id, '"');
-            }, $studentIdArray);
-            // Loop through each student ID and add them to the group
-            foreach ($studentIdArray as $studentId) {
+    
+        $genderId = $request->request->get('gender_id');
+        $gender = $entityManager->getRepository(Gender::class)->find($genderId);
+        if (!$gender) {
+            return $this->json(['error' => 'Gender not found'], Response::HTTP_NOT_FOUND);
+        }
+    
+        // Extract and add students to the group
+        $studentIds = $request->request->get('studentId');
+        $studentIds = $request->request->get('studentId');
+        if (!is_iterable($studentIds)) {
+            // Handle the case where $studentIds is not iterable
+            return new JsonResponse(['error' => 'Invalid student IDs'], Response::HTTP_BAD_REQUEST);
+        }
+        if (!empty($studentIds)) {
+            foreach ($studentIds as $studentId) {
                 $student = $entityManager->getRepository(Student::class)->find($studentId);
                 if (!$student) {
-                    return $this->json(['error' => 'student not found for ID: ' . $studentId], Response::HTTP_NOT_FOUND);
+                    return $this->json(['error' => 'Student not found for ID: ' . $studentId], Response::HTTP_NOT_FOUND);
                 }
                 $group->addStudent($student);
             }
         }
+    
         $group->setType($type);
+        $group->setName($name);
+        $group->setGender($gender);
+        $group->setAvatar($avatarFileName);
+    
         $entityManager->persist($group);
         $entityManager->flush();
     
         return $this->json(['message' => 'Group registered successfully'], Response::HTTP_CREATED);
     }
+    
 
 }

@@ -106,6 +106,12 @@
             "config/packages/debug.yaml"
         ]
     },
+    "symfony/firebase-notifier": {
+        "version": "6.2",
+        "recipe": {
+            "version": "5.1"
+        }
+    },
     "symfony/flex": {
         "version": "2.4",
         "recipe": {
