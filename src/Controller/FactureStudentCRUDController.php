@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\Notification;
 use DateTime;
 use App\Entity\Payment;
 use App\Repository\PaymentRepository;
@@ -13,6 +14,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Validator\Constraints\Date;
 
 #[Route('api/facture/student',name:'api_crud_facture_student')]
 class FactureStudentCRUDController extends AbstractController
@@ -76,16 +78,18 @@ class FactureStudentCRUDController extends AbstractController
     public function updateStatus(EntityManagerInterface $entityManager, int $id,Request $request): JsonResponse
     {
         $payment = $entityManager->getRepository(Payment::class)->find($id);
-
+        $student = $payment->getStudent();
         if (!$payment) {
             return new JsonResponse(['error' => 'payment not found'], 404);
         }
 
         $pay = $payment ;
+        $date = new DateTime('now');
 
-        // Assuming the request body contains the new status
-        $data = json_decode($request->getContent(), true);
-        $status = $data['status'] ?? null;
+        $notification = new Notification();
+        $notification->setContent('your payment work successfully');
+        $notification->setStudent($student);
+        $notification->setSentAt($date);
 
         $pay->setStatus("payed");
         $entityManager->flush();

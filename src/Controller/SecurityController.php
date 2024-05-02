@@ -40,5 +40,14 @@ public function TotalStudent(StudentRepository $studentRepository): Response
 
     return $this->json($total, Response::HTTP_OK);
 }
+#[Route('/total/all', name: 'api_total_all', methods: ['GET'])]
+public function Total(StudentRepository $studentRepository, TeacherRepository $teacherRepository): Response
+{
+    $students = $studentRepository->findAll();
+    $teachers = $teacherRepository->findAll();
+    $totalS = count($students);
+    $totalT = count($teachers); 
 
+    return $this->json(['student' => $totalS, 'teacher' => $totalT], Response::HTTP_OK);
+}
 }

@@ -66,8 +66,6 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'teacher_id', targetEntity: Session::class)]
     private Collection $sessions;
 
-    #[ORM\ManyToMany(targetEntity: Group::class, mappedBy: 'teachers')]
-    private Collection $groupeT;
 
     #[ORM\Column(length: 255)]
     private ?string $status = null;
@@ -93,14 +91,25 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\ManyToOne(inversedBy: 'teacher')]
     private ?Gender $genders = null;
 
+    #[ORM\ManyToMany(targetEntity: Group::class, inversedBy: 'teachers')]
+    private Collection $groupM;
+
+    #[ORM\OneToMany(targetEntity: Messagerie::class, mappedBy: 'teacher')]
+    private Collection $messageries;
+
+    #[ORM\OneToMany(targetEntity: Chat::class, mappedBy: 'teacher')]
+    private Collection $chats;
+
     public function __construct()
     {
         $this->sessions = new ArrayCollection();
-        $this->groupeT = new ArrayCollection();
         $this->reclamations = new ArrayCollection();
         $this->factureTeachers = new ArrayCollection();
         $this->groupes = new ArrayCollection();
         $this->notifications = new ArrayCollection();
+        $this->groupM = new ArrayCollection();
+        $this->messageries = new ArrayCollection();
+        $this->chats = new ArrayCollection();
         
     }
 
@@ -282,31 +291,6 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * @return Collection<int, Group>
-     */
-    public function getGroupeT(): Collection
-    {
-        return $this->groupeT;
-    }
-
-    public function addGroupeT(Group $groupeT): static
-    {
-        if (!$this->groupeT->contains($groupeT)) {
-            $this->groupeT->add($groupeT);
-            $groupeT->addTeacher($this);
-        }
-        return $this;
-    }
-
-    public function removeGroupeT(Group $groupeT): static
-    {
-        if ($this->groupeT->removeElement($groupeT)) {
-            $groupeT->removeTeacher($this);
-        }
-        return $this;
-    }
-
     public function getStatus(): ?string
     {
         return $this->status;
@@ -474,4 +458,67 @@ class Teacher implements UserInterface, PasswordAuthenticatedUserInterface
 
         return $this;
     }
+
+    /**
+     * @return Collection<int, Group>
+     */
+    public function getGroupM(): Collection
+    {
+        return $this->groupM;
+    }
+
+    public function addGroupM(Group $groupM): static
+    {
+        if (!$this->groupM->contains($groupM)) {
+            $this->groupM->add($groupM);
+        }
+
+        return $this;
+    }
+
+    public function removeGroupM(Group $groupM): static
+    {
+        $this->groupM->removeElement($groupM);
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Messagerie>
+     */
+    public function getMessageries(): Collection
+    {
+        return $this->messageries;
+    }
+
+    /**
+     * @return Collection<int, Chat>
+     */
+    public function getChats(): Collection
+    {
+        return $this->chats;
+    }
+
+    public function addChat(Chat $chat): static
+    {
+        if (!$this->chats->contains($chat)) {
+            $this->chats->add($chat);
+            $chat->setTeacher($this);
+        }
+
+        return $this;
+    }
+
+    public function removeChat(Chat $chat): static
+    {
+        if ($this->chats->removeElement($chat)) {
+            // set the owning side to null (unless already changed)
+            if ($chat->getTeacher() === $this) {
+                $chat->setTeacher(null);
+            }
+        }
+
+        return $this;
+    }
+
 }

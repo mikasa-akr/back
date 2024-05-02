@@ -131,7 +131,7 @@ class StudentCRUDController extends AbstractController
             if (!$gender) {
                 return new JsonResponse(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
             }
-            $student->setForfait($gender);
+            $student->setGender($gender);
         }        
 
         if (!empty($data['course_id'])) {

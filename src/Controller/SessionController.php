@@ -7,7 +7,9 @@ use DateInterval;
 use App\Entity\Group;
 use App\Entity\Course;
 use App\Entity\Session;
+use App\Entity\Student;
 use App\Entity\Teacher;
+use App\Entity\Notification;
 use App\Repository\GroupRepository;
 use App\Repository\SessionRepository;
 use App\Repository\StudentRepository;
@@ -311,4 +313,21 @@ public function update($id, Request $request, EntityManagerInterface $entityMana
     $updatedsession = $this->sessionRepository->updateSession($session);
     return new JsonResponse($updatedsession->toArray(), Response::HTTP_OK);
 }
+
+    #[Route('/perdu/{id}', name: 'update_perdu', methods: ['POST'])]
+    public function updateStatus(EntityManagerInterface $entityManager, int $id,Request $request): JsonResponse
+    {
+        $session = $this->sessionRepository->findOneBy(['id' => $id]);
+        $teacher = $session->getTeacher();
+        $date = new DateTime('now');
+        $notification = new Notification();
+        $notification->setContent('your session is lost it');
+        $notification->setTeacher($teacher);
+        $notification->setSentAt($date);
+        $session->setStatus("perdu");
+        $entityManager->persist($notification);
+        $entityManager->flush();
+
+        return new JsonResponse(['message' => 'Status updated successfully']);
+    }
 }

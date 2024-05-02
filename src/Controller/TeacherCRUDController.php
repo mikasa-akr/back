@@ -78,7 +78,6 @@ class TeacherCRUDController extends AbstractController
     ];
     return new JsonResponse($data, Response::HTTP_OK);
     }
-
     
     #[Route('/{id}/edit', name: 'api_crud_teacher_edit', methods: ['PUT'])]
     public function update($id, Request $request, EntityManagerInterface $entityManager): JsonResponse
@@ -179,7 +178,7 @@ class TeacherCRUDController extends AbstractController
             return new JsonResponse(['error' => 'Teacher or group not found'], Response::HTTP_NOT_FOUND);
         }
     
-        $teacher->addGroupeT($group);
+        $teacher->addGroupe($group);
         $entityManager->flush();
     
         return new JsonResponse(['message' => 'Teacher associated with group successfully']);
@@ -194,7 +193,7 @@ class TeacherCRUDController extends AbstractController
     if (!$teacher) {
         return $this->json(['error' => 'Teacher not found'], Response::HTTP_NOT_FOUND);
     }
-    $groups = $teacher->getGroupeT();
+    $groups = $teacher->getGroupes();
 
     $data = $serializer->serialize($groups, 'json', [
         'groups' => ['group_list'],
@@ -224,7 +223,7 @@ public function getStudents(int $id): Response
         return $this->json(['error' => 'Teacher not found'], Response::HTTP_NOT_FOUND);
     }
 
-    $groups = $teacher->getGroupeT();
+    $groups = $teacher->getGroupes();
     $students = [];
 
     foreach ($groups as $group) {
@@ -269,22 +268,32 @@ public function TotalPayment(FactureTeacherRepository $factureRepository): Respo
 }
 
 #[Route('/total/revenue', name: 'api_crud_total', methods: ['GET'])]
-public function totalRevenue(FactureTeacherRepository $factureRepository, PaymentRepository $paymentRepository, ExpensesRepository $expensesRepository): Response
+public function totalRevenue(FactureTeacherRepository $factureTeacherRepository, PaymentRepository $paymentRepository, ExpensesRepository $expensesRepository): Response
 {
-    $factureTeacher = $factureRepository->findOneBy(['status' => 'payed']);
-    $factureStudent = $paymentRepository->findOneBy(['status' => 'payed']);
-    $expenses = $expensesRepository->findAll();
+    // Fetch all teacher factures
+    $teacherFactures = $factureTeacherRepository->findAll();
     
-    $totalRevenue = 0;
-
-    if ($factureTeacher !== null) {
-        $factureTeacherAmount = $factureTeacher->getAmount();
-    } else {
-        // Handle the case where there is no facture with status 'payed'
-        $factureTeacherAmount = 0;
+    // Filter teacher factures by status 'payed' and calculate the total amount
+    $factureTeacherAmount = 0;
+    foreach ($teacherFactures as $facture) {
+        if ($facture->getStatus() === 'payed') {
+            $factureTeacherAmount += $facture->getAmount();
+        }
     }
-    
-    $factureStudentAmount = $factureStudent ? $factureStudent->getAmount() : 0;
+
+    // Fetch all student factures
+    $studentFactures = $paymentRepository->findAll();
+
+    // Filter student factures by status 'payed' and calculate the total amount
+    $factureStudentAmount = 0;
+    foreach ($studentFactures as $facture) {
+        if ($facture->getStatus() === 'payed') {
+            $factureStudentAmount += $facture->getAmount();
+        }
+    }
+
+    // Fetch all expenses
+    $expenses = $expensesRepository->findAll();
 
     // Calculate the total amount of expenses
     $totalExpenses = 0;
@@ -296,7 +305,8 @@ public function totalRevenue(FactureTeacherRepository $factureRepository, Paymen
     $totalRevenue = $factureStudentAmount - ($factureTeacherAmount + $totalExpenses);
 
     return $this->json(['total_revenue' => $totalRevenue], Response::HTTP_OK);
-}
+}      
+
 
 #[Route('/total/group/{id}', name: 'api_crud_group_total', methods: ['GET'])]
 public function TotalGroup($id, GroupRepository $groupRepository): Response

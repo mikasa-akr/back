@@ -11,6 +11,7 @@ use App\Entity\Forfait;
 use App\Entity\Payment;
 use App\Entity\Student;
 use App\Entity\Teacher;
+use App\Entity\Notification;
 use Psr\Log\LoggerInterface;
 use App\Repository\StudentRepository;
 use App\Repository\TeacherRepository;
@@ -66,6 +67,7 @@ class RegistrationController extends AbstractController
         if (!$gender) {
             return $this->json(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
         }
+        $price=$course->getPrice();
     
         $teacher = new Teacher();
         $hashedPassword = $passwordHasher->hashPassword($teacher, $plaintextPassword);
@@ -80,8 +82,19 @@ class RegistrationController extends AbstractController
         $teacher->setAvatar($avatarFileName);
         $teacher->setCourse($course);
         $teacher->setStatus("offline");
-        $teacher->setHourlyRate(30);
+        $teacher->setHourlyRate($price);
+
+        $studentId = 1; // Assuming the ID of the student you want to associate with the notification
+        $student = $entityManager->getRepository(Student::class)->find($studentId);
+
+        $date = new DateTime('now');
+        $notification = new Notification();
+        $notification->setContent('new teacher added');
+        $notification->setStudent($student);
+        $notification->setSentAt($date);
+        
         $em->persist($teacher);
+        $em->persist($notification);
         $em->flush();
     
         // Optionally, return the data of the newly registered teacher
@@ -225,7 +238,18 @@ class RegistrationController extends AbstractController
             }
     
             // Persist payment entity with client secret
+
+            $studentIdA = 1; // Assuming the ID of the student you want to associate with the notification
+            $studentA = $entityManager->getRepository(Student::class)->find($studentIdA);
+
+            $date = new DateTime('now');
+            $notification = new Notification();
+            $notification->setContent('new student added');
+            $notification->setStudent($studentA);
+            $notification->setSentAt($date);
+
             $entityManager->persist($payment);
+            $entityManager->persist($notification);
             $entityManager->flush();
     
             $studentId = isset($student) ? $student->getId() : $existingStudent->getId();
@@ -284,6 +308,7 @@ class RegistrationController extends AbstractController
             $formattedCourses[] = [
                 'id' => $course->getId(),
                 'type' => $course->getType(),
+                'price' => $course->getPrice()
             ];
         }
         return new JsonResponse($formattedCourses, Response::HTTP_OK);

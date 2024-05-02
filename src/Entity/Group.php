@@ -22,10 +22,6 @@ class Group
     #[Groups(['group_sessions'])] 
     private Collection $sessions;
 
-    #[ORM\ManyToMany(targetEntity: Teacher::class, inversedBy: 'groupeT')]
-    #[Groups(['group_list'])]
-    private Collection $teachers;
-
     #[ORM\ManyToMany(targetEntity: Student::class, inversedBy: 'groupe', cascade: ['persist'])]
     #[Groups(['group_list'])]
     private ?Collection $students = null;
@@ -49,11 +45,18 @@ class Group
     #[ORM\ManyToOne(inversedBy: 'groupes')]
     private ?Gender $gender = null;
 
+
+    #[ORM\ManyToMany(targetEntity: Teacher::class, mappedBy: 'groupM')]
+    private Collection $teachers;
+
+    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
+    private ?Chat $chat = null;
+
     public function __construct()
     {
         $this->sessions = new ArrayCollection();
-        $this->teachers = new ArrayCollection();
         $this->students = new ArrayCollection();
+        $this->teachers = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -87,30 +90,6 @@ class Group
                 $session->setGroupeSeanceId(null);
             }
         }
-
-        return $this;
-    }
-
-    /**
-     * @return Collection<int, Teacher>
-     */
-    public function getTeachers(): Collection
-    {
-        return $this->teachers;
-    }
-
-    public function addTeacher(Teacher $teacher): static
-    {
-        if (!$this->teachers->contains($teacher)) {
-            $this->teachers->add($teacher);
-        }
-
-        return $this;
-    }
-
-    public function removeTeacher(Teacher $teacher): static
-    {
-        $this->teachers->removeElement($teacher);
 
         return $this;
     }
@@ -167,7 +146,7 @@ class Group
             'id' => $this->getId(),
             'type' => $this->getType(),
             'student_id' => $this->getStudents(),
-            'teacher_id' => $this->getTeachers()->toArray(),
+            'teacher_id' => $this->getTeach()->toArray(),
         ];
     }
 
@@ -215,6 +194,45 @@ class Group
     public function setGender(?Gender $gender): static
     {
         $this->gender = $gender;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Teacher>
+     */
+    public function getTeachers(): Collection
+    {
+        return $this->teachers;
+    }
+
+    public function addTeacher(Teacher $teacher): static
+    {
+        if (!$this->teachers->contains($teacher)) {
+            $this->teachers->add($teacher);
+            $teacher->addGroupM($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTeacher(Teacher $teacher): static
+    {
+        if ($this->teachers->removeElement($teacher)) {
+            $teacher->removeGroupM($this);
+        }
+
+        return $this;
+    }
+
+    public function getChat(): ?Chat
+    {
+        return $this->chat;
+    }
+
+    public function setChat(?Chat $chat): static
+    {
+        $this->chat = $chat;
 
         return $this;
     }

@@ -113,23 +113,15 @@ class ReclamationCRUDController extends AbstractController
         $reclamation->setTime($currentTime);
         $reclamation->setType("session cancellation");
         $reclamation->setTeacher($teacher);
-        
-        if ($totalHours >= 24) {
-            $reclamation->setStatus("annulated");
-            $reclamation->setReason(" ");
-        } elseif ($totalHours >= 2 && $totalHours < 24) {
-            $reclamation->setReason($reason);
-            $reclamation->setStatus("annulated");
-        } else {
-            throw new \Exception('Invalid time difference');
-        }
+        $reclamation->setStatus("annulated");
+        $reclamation->setReason($reason);
         $session->setStatus("canceled session");
         $entityManager->persist($reclamation);
         $entityManager->flush();
     }
 
-    #[Route('/annulation/session/{id}', name: 'api_annulation_session', methods: ['POST'])]
-    public function AnnulationSession($id, Request $request, EntityManagerInterface $entityManager, SessionRepository $sessionRepository): JsonResponse
+    #[Route('/annulation/session/{studentId}/{sessionId}', name: 'api_annulation_session', methods: ['POST'])]
+    public function AnnulationSession($studentId, $sessionId, Request $request, EntityManagerInterface $entityManager, SessionRepository $sessionRepository): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
         if (null === $data) {
@@ -139,15 +131,15 @@ class ReclamationCRUDController extends AbstractController
         $reason = $data['reason'];
         
         // Retrieve the session from the database
-        $session = $sessionRepository->find($id);
+        $session = $sessionRepository->find($sessionId);
         if (!$session) {
             return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
         }
         
-        // Retrieve the groups associated with the session
-        $groups = $session->getGroupeSeanceId();
-        if (!$groups) {
-            return $this->json(['error' => 'Groups not found for the session'], Response::HTTP_NOT_FOUND);
+        // Get the student by ID
+        $student = $entityManager->getRepository(Student::class)->find($studentId);
+        if (!$student) {
+            return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
         }
         
         // Get the current time
@@ -159,77 +151,80 @@ class ReclamationCRUDController extends AbstractController
         $diff = $sessionDateTime->diff($currentTime);
         $totalHours = $diff->days * 24 + $diff->h;
         
-        // Create and persist the reclamation for each student associated with each group
-        foreach ($groups as $group) {
-            $students = $group->getStudents();
-            foreach ($students as $student) {
-                // Create a reclamation for each student
-                $reclamation = new Reclamation();
-                $reclamation->setTime($currentTime);
-                $reclamation->setType("session cancellation");
-                $reclamation->setStudent($student);
-                
-                if ($totalHours >= 24) {
-                    $reclamation->setReason(" ");
-                    $reclamation->setStatus("annulated");
-                } elseif ($totalHours >= 2 && $totalHours < 24) {
-                    $reclamation->setReason($reason);
-                    $reclamation->setStatus("annulated");
-                } else {
-                    throw new \Exception('Invalid time difference');
-                }
-                
-                // Persist the reclamation and flush changes to the database
-                $entityManager->persist($reclamation);
-            }
-        }
+        // Create and persist the reclamation for the specified student
+        // Create a reclamation for the student
+        $reclamation = new Reclamation();
+        $reclamation->setTime($currentTime);
+        $reclamation->setType("session cancellation");
+        $reclamation->setStudent($student);
+        $reclamation->setReason($reason);
+        $reclamation->setStatus("annulated");
+
+        // Persist the reclamation and flush changes to the database
+        $entityManager->persist($reclamation);
         
         // Update the session status to "canceled session"
         $session->setStatus("canceled session");
         
         $entityManager->flush();
         
-        return $this->json(['message' => 'Reclamations registered successfully'], Response::HTTP_CREATED);
+        return $this->json(['message' => 'Reclamation registered successfully'], Response::HTTP_CREATED);
     }
     
-
-    #[Route('/student/reclame/{id}', name: 'api_student_reclame', methods: ['POST'])]
-    public function Reclamation($id, Request $request, EntityManagerInterface $entityManager, SessionRepository $sessionRepository): Response
+    #[Route('/student/reclame/{studentId}/{sessionId}', name: 'api_seance_reclame', methods: ['POST'])]
+    public function Reclamation($studentId, $sessionId, Request $request, EntityManagerInterface $entityManager, SessionRepository $sessionRepository): Response
     {
         $data = json_decode($request->getContent(), true);
         if (null === $data) {
             return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
         }
-        $reason=$data['reason'];
+        $reason = $data['reason'];
     
-        $session = $sessionRepository->find($id);
+        $session = $sessionRepository->find($sessionId);
         if (!$session) {
             return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
         }
     
-        // Assuming getGroupeSeanceId() returns a single Group entity
+        $student = $entityManager->getRepository(Student::class)->findOneBy(['id' => $studentId]);
+        if (!$student) {
+            return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+        }
+    
         $group = $session->getGroupeSeanceId();
         if (!$group) {
             return $this->json(['error' => 'Group not found'], Response::HTTP_NOT_FOUND);
         }
     
-        $students = $group->getStudents();
-        $currentTime = new \DateTime('now');
-    
-        foreach ($students as $student) {
-            $reclamation = new Reclamation();
-            $reclamation->setTime($currentTime);
-            $reclamation->setType("reclamation");
-            $reclamation->setStudent($student);
-            $reclamation->setReason($reason);
-            $reclamation->setStatus("reclame");
-            $entityManager->persist($reclamation);
+        // Check if the student is a member of the group
+        if (!$group->getStudents()->contains($student)) {
+            return $this->json(['error' => 'Student is not a member of the group'], Response::HTTP_BAD_REQUEST);
         }
     
-        $entityManager->flush();
+        $currentTime = new \DateTime('now');
     
-        return $this->json(['message' => 'Reclamations registered successfully'], Response::HTTP_CREATED);
+        if ($reason === 'absence_prof') {
+            $session->setStatus('perdu');
+            // Flush changes to the session entity before creating the reclamation
+            $entityManager->flush();
+        }
+    
+        $reclamation = new Reclamation();
+        $reclamation->setTime($currentTime);
+        $reclamation->setType("reclamation");
+        $reclamation->setStudent($student);
+        $reclamation->setReason($reason);
+        $reclamation->setStatus("reclame");
+        $entityManager->persist($reclamation);
+    
+        try {
+            $entityManager->flush();
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    
+        return $this->json(['message' => 'Reclamation registered successfully'], Response::HTTP_CREATED);
     }
+    
 
     #[Route('/student/annulation/{id}', name: 'api_crud_annulation_student', methods: ['GET'])]
     public function StudentAnnulation($id): JsonResponse
@@ -274,7 +269,7 @@ class ReclamationCRUDController extends AbstractController
     }
 
 
-    #[Route('/teacher/annulation/{id}', name: 'api_crud_annulation_teacher', methods: ['GET'])]
+    #[Route('/teacher/annulation/{id}', name: 'api_crud_annulation_teacher_show', methods: ['GET'])]
     public function TeacherAnnulation($id): JsonResponse
     {   
         $reclamations = $this->reclamationRepository->findBy(['teacher' => $id , 'status' => 'annulated']);

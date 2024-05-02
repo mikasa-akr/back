@@ -32,6 +32,10 @@ class Course
     #[ORM\ManyToMany(targetEntity: Student::class, mappedBy: 'course')]
     private Collection $students;
 
+    #[ORM\Column(length: 255)]
+    private ?string $price = null;
+
+
     public function __construct()
     {
         $this->teachers = new ArrayCollection();
@@ -165,5 +169,17 @@ class Course
             'id' => $this->getId(),
             'type'=>$this->getType()
         ];
+    }
+
+    public function getPrice(): ?string
+    {
+        return $this->price;
+    }
+
+    public function setPrice(string $price): static
+    {
+        $this->price = $price;
+
+        return $this;
     }
 }

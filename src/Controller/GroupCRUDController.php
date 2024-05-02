@@ -2,12 +2,15 @@
 
 namespace App\Controller;
 
-use App\Entity\Gender;
+use App\Entity\Chat;
 use App\Entity\Group;
+use App\Entity\Gender;
 use App\Entity\Student;
 use App\Entity\Teacher;
+use App\Entity\Notification;
 use App\Repository\GroupRepository;
 use App\Repository\StudentRepository;
+use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -61,63 +64,65 @@ class GroupCRUDController extends AbstractController
     #[Route('/{id}', name: 'api_crud_group_show', methods: ['GET'])]
     public function show($id): JsonResponse
     {
-        $group = $this->groupRepository->findOneBy(['id' => $id]);
-        $teachers = [];
-        foreach ($group->getTeachers() as $teacher) {
-            $teachers[] = [
-                'id' => $teacher->getId(),
-                'firstName' => $teacher->getFirstName(),
-            ];
-        }
+        $group = $this->groupRepository->find($id);
     
         $students = [];
         foreach ($group->getStudents() as $student) {
             $students[] = [
                 'id' => $student->getId(),
                 'firstName' => $student->getFirstName(),
+                'lastName' => $student->getLastName(),
+                'student_course' => $student->getCourse(),
+
             ];
         }
     
-        $data = [
+        $data[] = [
             'id' => $group->getId(),
             'type' => $group->getType(),
-            'teacher_id' => $teachers,
+            'teacherId' => $group->getTeach()->getId(),
+            'teacher_first' => $group->getTeach()->getFirstName(),
+            'teacher_last' => $group->getTeach()->getLastName(),
+            'teacher_course' => $group->getTeach()->getCourse(),
             'student_id' => $students,
+            'name'=>$group->getName(),
+            'avatar'=>$group->getAvatar(),
+            'gender' => $group->getGender()->getName(),
+            'gender_id' => $group->getGender()->getId()
+
         ];
     
         return new JsonResponse($data, Response::HTTP_OK);
     }
     
-
     #[Route('/{id}/edit', name: 'api_crud_group_edit', methods: ['PUT'])]
-    public function update($id, Request $request,EntityManagerInterface $entityManager): JsonResponse
+    public function update($id, Request $request, EntityManagerInterface $entityManager): JsonResponse
     {
         $group = $this->groupRepository->findOneBy(['id' => $id]);
         $data = json_decode($request->getContent(), true);
     
-        empty($data['type']) ? true : $group->setType($data['type']);
-
-        if (!empty($data['teacher_id'])) {
-            $teacherId = $data['teacher_id'];
-            $teacher = $entityManager->getRepository(Teacher::class)->find($teacherId);
-            if (!$teacher) {
-                return new JsonResponse(['error' => 'teacher not found'], Response::HTTP_NOT_FOUND);
-            }
-            $group->addTeacher($teacher);
-        }
-
         if (!empty($data['student_id'])) {
             $studentId = $data['student_id'];
             $student = $entityManager->getRepository(Student::class)->find($studentId);
             if (!$student) {
                 return new JsonResponse(['error' => 'student not found'], Response::HTTP_NOT_FOUND);
             }
-            $group->addstudent($student);
-        }
-        $updatedgroup = $this->groupRepository->updateGroup($group);
+            $group->addStudent($student);
     
-        return new JsonResponse($updatedgroup->toArray(), Response::HTTP_OK);
+            // Create and persist a notification for the student
+            $notification = new Notification();
+            $notification->setContent('added to group successfully');
+            $notification->setStudent($student);
+            $notification->setSentAt(new \DateTime('now'));
+            $entityManager->persist($notification);
+        }
+    
+        $entityManager->persist($group);
+        $entityManager->flush();
+    
+        return new JsonResponse(['message' => 'Group updated successfully'], Response::HTTP_OK);
     }
+    
 
     #[Route('/{id}', name: 'api_crud_group_delete', methods: ['DELETE'])]
     public function delete(Group $group, EntityManagerInterface $entityManager): JsonResponse
@@ -176,6 +181,16 @@ class GroupCRUDController extends AbstractController
                 $group->addStudent($student);
             }
         }
+        $date = new DateTime('now');
+        $notification = new Notification();
+        $notification->setContent('added group successfully');
+        $notification->setStudent($student);
+        $notification->setSentAt($date);
+        $notification->setTeacher($teacher);
+        
+        $chat = new Chat();
+        $chat->setGroupe($group);
+        $chat->setTeacher($teacher);
     
         $group->setType($type);
         $group->setName($name);
@@ -183,10 +198,9 @@ class GroupCRUDController extends AbstractController
         $group->setAvatar($avatarFileName);
     
         $entityManager->persist($group);
+        $entityManager->persist($chat);
         $entityManager->flush();
     
         return $this->json(['message' => 'Group registered successfully'], Response::HTTP_CREATED);
     }
-    
-
 }
