@@ -33,41 +33,34 @@ class RegistrationController extends AbstractController
     public function registerTeacher(ManagerRegistry $doctrine, Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager): Response
     {
         $em = $doctrine->getManager();
-        $data = json_decode($request->getContent(), true);
-        
-        // Check if required fields are present
-        $requiredFields = ['email', 'password', 'first_name', 'last_name', 'number', 'gender'];
-        foreach ($requiredFields as $field) {
-            if (!isset($data[$field])) {
-                return $this->json(['error' => 'Missing required field: ' . $field], Response::HTTP_BAD_REQUEST);
-            }
-        }
+    
         $email = $request->request->get('email');
         $plaintextPassword = $request->request->get('password');
         $firstName = $request->request->get('first_name');
         $lastName = $request->request->get('last_name');
-        $number =$request->request->get('number');
-        $registeredAt=new DateTime('now');
+        $number = $request->request->get('number');
+        $registeredAt = new DateTime('now');
         $avatarFile = $request->files->get('avatar');
-
+    
         $avatarFileName = null;
         if ($avatarFile) {
             // Move uploaded file to a directory
             $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
             $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
         }
+    
         $courseId = $request->request->get('course_id');
         $course = $entityManager->getRepository(Course::class)->find($courseId);
         if (!$course) {
             return $this->json(['error' => 'course not found'], Response::HTTP_NOT_FOUND);
         }
-
+    
         $genderId = $request->request->get('gender_id');
         $gender = $entityManager->getRepository(Gender::class)->find($genderId);
         if (!$gender) {
             return $this->json(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
         }
-        $price=$course->getPrice();
+        $price = $course->getPrice();
     
         $teacher = new Teacher();
         $hashedPassword = $passwordHasher->hashPassword($teacher, $plaintextPassword);
@@ -83,16 +76,17 @@ class RegistrationController extends AbstractController
         $teacher->setCourse($course);
         $teacher->setStatus("offline");
         $teacher->setHourlyRate($price);
-
-        $studentId = 1; // Assuming the ID of the student you want to associate with the notification
+    
+        // Assuming the ID of the student you want to associate with the notification
+        $studentId = 1;
         $student = $entityManager->getRepository(Student::class)->find($studentId);
-
-        $date = new DateTime('now');
+    
+        $date = new \DateTime('now');
         $notification = new Notification();
         $notification->setContent('new teacher added');
         $notification->setStudent($student);
         $notification->setSentAt($date);
-        
+    
         $em->persist($teacher);
         $em->persist($notification);
         $em->flush();
@@ -100,6 +94,7 @@ class RegistrationController extends AbstractController
         // Optionally, return the data of the newly registered teacher
         return $this->json(['message' => 'Registered Successfully', 'teacher' => $teacher->toArray()]);
     }
+    
 
     #[Route('/signUp/student', name: 'api_register_student', methods: ['POST'])]
     public function registerStudent(Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager, LoggerInterface $logger): Response {
@@ -242,7 +237,7 @@ class RegistrationController extends AbstractController
             $studentIdA = 1; // Assuming the ID of the student you want to associate with the notification
             $studentA = $entityManager->getRepository(Student::class)->find($studentIdA);
 
-            $date = new DateTime('now');
+            $date = new \DateTime('now');
             $notification = new Notification();
             $notification->setContent('new student added');
             $notification->setStudent($studentA);

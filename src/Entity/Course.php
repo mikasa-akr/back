@@ -14,14 +14,10 @@ class Course
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['course_details'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['course_details'])]
     private ?string $type = null;
-
-    private ?Group $groupe = null;
 
     #[ORM\OneToMany(mappedBy: 'course', targetEntity: Teacher::class)]
     private Collection $teachers;
@@ -56,18 +52,6 @@ class Course
     public function setType(string $type): static
     {
         $this->type = $type;
-
-        return $this;
-    }
-
-    public function getGroupe(): ?Group
-    {
-        return $this->groupe;
-    }
-
-    public function setGroupe(?Group $groupe): static
-    {
-        $this->groupe = $groupe;
 
         return $this;
     }
@@ -167,7 +151,9 @@ class Course
     {
         return [
             'id' => $this->getId(),
-            'type'=>$this->getType()
+            'type'=>$this->getType(),
+            'price'=>$this->getPrice(),
+
         ];
     }
 

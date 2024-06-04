@@ -41,6 +41,9 @@ class FactureStudentCRUDController extends AbstractController
                 'stripeCard' => $facture->getCardNumber()
             ];
         }
+        usort($data, function($a, $b) {
+            return $b['datePay'] <=> $a['datePay'];
+        });
     
         return new JsonResponse($data, Response::HTTP_OK);
     }

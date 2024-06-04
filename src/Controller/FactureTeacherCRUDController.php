@@ -37,8 +37,10 @@ class FactureTeacherCRUDController extends AbstractController
                 'amount' => $facture->getAmount(),
                 'datePay' => $facture->getDatePay() ? $facture->getDatePay()->format('Y-m-d H:i:s') : null,
                 'dateAt' => $facture->getDateAt() ? $facture->getDateAt()->format('Y-m-d H:i:s') : null,
-
             ];
+            usort($data, function($a, $b) {
+                return $b['datePay'] <=> $a['datePay'];
+            });
         }
     
         return new JsonResponse($data, Response::HTTP_OK);
@@ -153,9 +155,9 @@ class FactureTeacherCRUDController extends AbstractController
                 'amount' => $total * 100, // Convert to cents
                 'currency' => 'usd',
                 'description' => 'Course Payment',
-                //'confirm' => true, // Confirm the PaymentIntent immediately
-                //'payment_method' => 'pm_card_visa', // Example payment method ID (replace with actual payment method ID)
-                //'return_url' => 'https://dashboard.stripe.com/test/dashboard', // Specify the return URL for the payment
+                'confirm' => true, // Confirm the PaymentIntent immediately
+                'payment_method' => 'pm_card_visa', // Example payment method ID (replace with actual payment method ID)
+                'return_url' => 'https://dashboard.stripe.com/test/dashboard', // Specify the return URL for the payment
             ]);
     
             // Update facture entities with payment details

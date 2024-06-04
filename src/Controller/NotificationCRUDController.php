@@ -32,6 +32,7 @@ class NotificationCRUDController extends AbstractController
         
         $notification = $teacher->getNotifications();
         
+        
         $formattednotification = [];
         foreach ($notification as $notification) {
             $formattednotification[] = [
@@ -40,6 +41,9 @@ class NotificationCRUDController extends AbstractController
                 'time' => $notification->getSentAt()
             ];
         }
+        usort($formattednotification, function($a, $b) {
+            return $b['time'] <=> $a['time'];
+        });
         
         return $this->json($formattednotification, Response::HTTP_OK, [], ['groups' => ['notification_details']]);
     }
@@ -50,21 +54,40 @@ class NotificationCRUDController extends AbstractController
         $student = $studentRepository->findOneBy(['id' => $id]);
         
         if (!$student) {
-            return $this->json(['error' => 'student not found'], Response::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
         }
+    
+        $notifications = [];
         
-        $notification = $student->getNotifications();
-        
-        $formattednotification = [];
-        foreach ($notification as $notification) {
-            $formattednotification[] = [
+        // Fetch notifications from groups
+        $groups = $student->getGroupe();
+        foreach ($groups as $group) {
+            $groupNotifications = $group->getNotifications();
+            foreach ($groupNotifications as $notification) {
+                $notifications[] = [
+                    'id' => $notification->getId(),
+                    'content' => $notification->getContent(),
+                    'time' => $notification->getSentAt()->format('Y-m-d H:i:s') // Format time as needed
+                ];
+            }
+        }
+    
+        // Fetch direct notifications for the student
+        $studentNotifications = $student->getNotifications();
+        foreach ($studentNotifications as $notification) {
+            $notifications[] = [
                 'id' => $notification->getId(),
                 'content' => $notification->getContent(),
-                'time' => $notification->getSentAt()
+                'time' => $notification->getSentAt()->format('Y-m-d H:i:s') // Format time as needed
             ];
         }
-        
-        return $this->json($formattednotification, Response::HTTP_OK, [], ['groups' => ['notification_details']]);
+    
+        // Sort notifications by time (descending order)
+        usort($notifications, function($a, $b) {
+            return strtotime($b['time']) - strtotime($a['time']);
+        });
+    
+        return $this->json($notifications, Response::HTTP_OK, [], ['groups' => ['notification_details']]);
     }
     
 }

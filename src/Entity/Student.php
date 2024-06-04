@@ -100,7 +100,7 @@ class Student implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'student', targetEntity: Reclamation::class)]
     private Collection $reclamations;
 
-    #[ORM\OneToMany(targetEntity: Payment::class, mappedBy: 'student')]
+    #[ORM\OneToMany(targetEntity: Payment::class, mappedBy: 'student', cascade: ['remove'])]
     private Collection $payments;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]

@@ -2,15 +2,17 @@
 
 namespace App\Controller;
 
+use DateTime;
 use App\Entity\Chat;
 use App\Entity\Group;
 use App\Entity\Gender;
 use App\Entity\Student;
 use App\Entity\Teacher;
+use App\Entity\Messagerie;
 use App\Entity\Notification;
+use Psr\Log\LoggerInterface;
 use App\Repository\GroupRepository;
 use App\Repository\StudentRepository;
-use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -61,13 +63,13 @@ class GroupCRUDController extends AbstractController
         return new JsonResponse($data, Response::HTTP_OK);
     }
 
-    #[Route('/{id}', name: 'api_crud_group_show', methods: ['GET'])]
+    #[Route('/group/{id}', name: 'api_crud_group_show', methods: ['GET'])]
     public function show($id): JsonResponse
     {
         $group = $this->groupRepository->find($id);
     
         $students = [];
-        foreach ($group->getStudents() as $student) {
+        foreach ($group->getStudents() ? $group->getStudents() : null as $student) {
             $students[] = [
                 'id' => $student->getId(),
                 'firstName' => $student->getFirstName(),
@@ -124,33 +126,29 @@ class GroupCRUDController extends AbstractController
     }
     
 
-    #[Route('/{id}', name: 'api_crud_group_delete', methods: ['DELETE'])]
+    #[Route('/delete/{id}', name: 'api_crud_group_delete', methods: ['DELETE'])]
     public function delete(Group $group, EntityManagerInterface $entityManager): JsonResponse
-    {
+    {   
+        // Remove the group
         $entityManager->remove($group);
         $entityManager->flush();
-
+    
         return new JsonResponse(null, Response::HTTP_NO_CONTENT);
     }
-
+    
+    
     #[Route('/signUp/group', name: 'api_register_group', methods: ['POST'])]
     public function registerGroup(Request $request, EntityManagerInterface $entityManager): JsonResponse
     {
-    
-        $type = $request->request->get('type');
-        $name = $request->request->get('name');
-        $avatarFile = $request->files->get('avatar');
-        $group = new Group();
-    
-        $avatarFileName = null;
-        if ($avatarFile) {
-            // Move uploaded file to a directory
-            $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
-            $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
+        $data = json_decode($request->getContent(), true);
+        if (null === $data) {
+            return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
         }
     
-        // Fetch teacher by teacher_id if provided
-        $teacherId = $request->request->get('teacher_id');
+        $type = $data['type'];
+        $group = new Group();
+    
+        $teacherId = $data['teacherId'];
         if (!empty($teacherId)) {
             $teacher = $entityManager->getRepository(Teacher::class)->find($teacherId);
             if (!$teacher) {
@@ -159,17 +157,14 @@ class GroupCRUDController extends AbstractController
             $group->setTeach($teacher);
         }
     
-        $genderId = $request->request->get('gender_id');
+        $genderId = $data['gender_id'];
         $gender = $entityManager->getRepository(Gender::class)->find($genderId);
         if (!$gender) {
             return $this->json(['error' => 'Gender not found'], Response::HTTP_NOT_FOUND);
         }
     
-        // Extract and add students to the group
-        $studentIds = $request->request->get('studentId');
-        $studentIds = $request->request->get('studentId');
-        if (!is_iterable($studentIds)) {
-            // Handle the case where $studentIds is not iterable
+        $studentIds = $data['studentId'];
+        if (!is_array($studentIds)) {
             return new JsonResponse(['error' => 'Invalid student IDs'], Response::HTTP_BAD_REQUEST);
         }
         if (!empty($studentIds)) {
@@ -179,15 +174,20 @@ class GroupCRUDController extends AbstractController
                     return $this->json(['error' => 'Student not found for ID: ' . $studentId], Response::HTTP_NOT_FOUND);
                 }
                 $group->addStudent($student);
+                $avatar = $student->getAvatar();
             }
         }
-        $date = new DateTime('now');
+    
+        $courseName = $teacher->getCourse()->getType();
+        $name = $type . ' group ' . $courseName .' '. $group->getId();
+
+        $date = new \DateTime('now');
         $notification = new Notification();
         $notification->setContent('added group successfully');
         $notification->setStudent($student);
         $notification->setSentAt($date);
         $notification->setTeacher($teacher);
-        
+    
         $chat = new Chat();
         $chat->setGroupe($group);
         $chat->setTeacher($teacher);
@@ -195,7 +195,8 @@ class GroupCRUDController extends AbstractController
         $group->setType($type);
         $group->setName($name);
         $group->setGender($gender);
-        $group->setAvatar($avatarFileName);
+        $group->setChat($chat);
+        $group->setAvatar($avatar);
     
         $entityManager->persist($group);
         $entityManager->persist($chat);
@@ -203,4 +204,37 @@ class GroupCRUDController extends AbstractController
     
         return $this->json(['message' => 'Group registered successfully'], Response::HTTP_CREATED);
     }
+
+    #[Route('/session', name: 'api_group_all', methods: ['GET'])]
+public function index2(GroupRepository $groupRepository, LoggerInterface $logger): JsonResponse
+{
+    $groups = $groupRepository->findAll();
+    $data = [];
+    foreach ($groups as $group) {
+        $sessions = $group->getSessions();
+        $total= 0;
+            $students = $group->getStudents()->first();
+            foreach ($students as $student) {
+                $nhrtotal=$student->getForfait()->getNbrHourSession();
+                $nhrseance=$student->getForfait()->getNbrHourSeance();
+                $total= $nhrtotal-$nhrseance;
+            }
+            if (count($sessions) < $total) {
+
+            $data[] = [
+                'id' => $group->getId(),
+                'type' => $group->getType(),
+                'name' => $group->getName(),
+                'avatar' => $group->getAvatar(),
+                'gender' => $group->getGender()->getName(),
+                'gender_id' => $group->getGender()->getId()
+            ];
+            $logger->info("Group {$group->getId()} added to response (sufficient remaining hours)"); // Success message
+        }else {
+            $logger->info("Group {$group->getId()} skipped (insufficient remaining hours)"); // Failure message
+        }
+    }
+
+    return new JsonResponse($data, Response::HTTP_OK);
+}
 }

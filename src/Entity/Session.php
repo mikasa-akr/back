@@ -42,13 +42,13 @@ class Session
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $time_end = null;
 
-    #[ORM\OneToMany(mappedBy: 'session', targetEntity: Rattrapage::class)]
+    #[ORM\OneToMany(mappedBy: 'session', targetEntity: Rattrapage::class,cascade:['remove'])]
     private Collection $rattrapages;
 
-    #[ORM\OneToMany(mappedBy: 'session', targetEntity: Vote::class)]
+    #[ORM\OneToMany(mappedBy: 'session', targetEntity: Vote::class,cascade:['remove'])]
     private Collection $votes;
 
-    #[ORM\ManyToOne(inversedBy: 'session')]
+    #[ORM\ManyToOne(inversedBy: 'session',cascade:['remove'])]
     private ?FactureTeacher $factureTeacher = null;
 
     public function __construct()

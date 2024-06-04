@@ -6,10 +6,12 @@ use App\Entity\Session;
 use App\Entity\Student;
 use App\Entity\Teacher;
 use App\Entity\Reclamation;
+use App\Entity\Notification;
 use App\Repository\SessionRepository;
 use App\Repository\StudentRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\ReclamationRepository;
+use PHPUnit\Framework\Test;
 use Symfony\Component\VarDumper\VarDumper;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -116,9 +118,59 @@ class ReclamationCRUDController extends AbstractController
         $reclamation->setStatus("annulated");
         $reclamation->setReason($reason);
         $session->setStatus("canceled session");
+
+        $notification = new Notification();
+        $text = 'your teacher cancel session '. $session->getDateSeance()->format('Y-m-d');
+        $notification->setContent($text);
+        $notification->setRgroupe($session->getGroupeSeanceId());
+        $notification->setSentAt(new \DateTime('now'));
+
+        $entityManager->persist($notification);
         $entityManager->persist($reclamation);
         $entityManager->flush();
     }
+
+    #[Route('/teacher/reclame/{sessionId}', name: 'api_seance_reclame_teacher', methods: ['POST'])]
+    public function ReclamationTeacher($sessionId, Request $request, EntityManagerInterface $entityManager, SessionRepository $sessionRepository): Response
+    {
+        $data = json_decode($request->getContent(), true);
+        if (null === $data) {
+            return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
+        }
+        $reason = $data['reason'];
+    
+        $session = $sessionRepository->find($sessionId);
+        if (!$session) {
+            return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
+        }
+        $currentTime = new \DateTime('now');
+
+        $teacher = $session->getTeacher();
+
+        $reclamation = new Reclamation();
+        $reclamation->setTime($currentTime);
+        $reclamation->setType("reclamation");
+        $reclamation->setTeacher($teacher);
+        $reclamation->setReason($reason);
+        $reclamation->setStatus("reclame");
+
+        $notification = new Notification();
+        $text = 'Your teacher marked a complaint in session ' . $session->getDateSeance()->format('Y-m-d') . ":\n" . $reason;        
+        $notification->setContent($text);
+        $notification->setRgroupe($session->getGroupeSeanceId());
+        $notification->setSentAt($currentTime);
+
+        $entityManager->persist($reclamation);
+        $entityManager->persist($notification);
+    
+        try {
+            $entityManager->flush();
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    
+        return $this->json(['message' => 'Reclamation registered successfully'], Response::HTTP_CREATED);
+    } 
 
     #[Route('/annulation/session/{studentId}/{sessionId}', name: 'api_annulation_session', methods: ['POST'])]
     public function AnnulationSession($studentId, $sessionId, Request $request, EntityManagerInterface $entityManager, SessionRepository $sessionRepository): JsonResponse
@@ -159,12 +211,16 @@ class ReclamationCRUDController extends AbstractController
         $reclamation->setStudent($student);
         $reclamation->setReason($reason);
         $reclamation->setStatus("annulated");
+        
+        $notification = new Notification();
+        $text = 'student want to cancel session'. $session->getDateSeance()->format('Y-m-d');
+        $notification->setContent($text);
+        $notification->setTeacher($session->getTeacher());
+        $notification->setSentAt(new \DateTime('now'));
 
-        // Persist the reclamation and flush changes to the database
+        $entityManager->persist($notification);
         $entityManager->persist($reclamation);
         
-        // Update the session status to "canceled session"
-        $session->setStatus("canceled session");
         
         $entityManager->flush();
         
@@ -204,8 +260,20 @@ class ReclamationCRUDController extends AbstractController
     
         if ($reason === 'absence_prof') {
             $session->setStatus('perdu');
-            // Flush changes to the session entity before creating the reclamation
+
+            $notification = new Notification();
+            $text = 'student wants to cancel session ' . $session->getDateSeance()->format('Y-m-d');
+            $notification->setContent($text);
+            $notification->setTeacher($session->getTeacher());
+            $notification->setSentAt($currentTime);
             $entityManager->flush();
+        }
+        else {
+            $notification = new Notification();
+            $text = 'your teacher are late '. $session->getDateSeance()->format('Y-m-d');
+            $notification->setContent($text);
+            $notification->setRgroupe($session->getGroupeSeanceId());
+            $notification->setSentAt($currentTime);
         }
     
         $reclamation = new Reclamation();
@@ -214,7 +282,9 @@ class ReclamationCRUDController extends AbstractController
         $reclamation->setStudent($student);
         $reclamation->setReason($reason);
         $reclamation->setStatus("reclame");
+
         $entityManager->persist($reclamation);
+        $entityManager->persist($notification);
     
         try {
             $entityManager->flush();
@@ -223,8 +293,7 @@ class ReclamationCRUDController extends AbstractController
         }
     
         return $this->json(['message' => 'Reclamation registered successfully'], Response::HTTP_CREATED);
-    }
-    
+    } 
 
     #[Route('/student/annulation/{id}', name: 'api_crud_annulation_student', methods: ['GET'])]
     public function StudentAnnulation($id): JsonResponse
@@ -243,6 +312,9 @@ class ReclamationCRUDController extends AbstractController
                 'time' => $reclamation->getTime() ? $reclamation->getTime()->format('Y-m-d H:i:s') : null,
             ];
         }
+        usort($data, function($a, $b) {
+            return $b['time'] <=> $a['time'];
+        });
     
         return new JsonResponse($data, Response::HTTP_OK);
     }
@@ -264,10 +336,12 @@ class ReclamationCRUDController extends AbstractController
                 'time' => $reclamation->getTime() ? $reclamation->getTime()->format('Y-m-d H:i:s') : null,
             ];
         }
+        usort($data, function($a, $b) {
+            return $b['time'] <=> $a['time'];
+        });
     
         return new JsonResponse($data, Response::HTTP_OK);
     }
-
 
     #[Route('/teacher/annulation/{id}', name: 'api_crud_annulation_teacher_show', methods: ['GET'])]
     public function TeacherAnnulation($id): JsonResponse
@@ -286,6 +360,33 @@ class ReclamationCRUDController extends AbstractController
                 'time' => $reclamation->getTime() ? $reclamation->getTime()->format('Y-m-d H:i:s') : null,
             ];
         }
+        usort($data, function($a, $b) {
+            return $b['time'] <=> $a['time'];
+        });
+    
+        return new JsonResponse($data, Response::HTTP_OK);
+    }
+
+    #[Route('/teacher/reclame/{id}', name: 'api_crud_reclame_teacher_show', methods: ['GET'])]
+    public function TeacherReclame($id): JsonResponse
+    {   
+        $reclamations = $this->reclamationRepository->findBy(['teacher' => $id , 'status' => 'reclame']);
+        $data = [];
+    
+        foreach ($reclamations as $reclamation) {
+            $data[] = [
+                'id' => $reclamation->getId(),
+                'type' => $reclamation->getType(),
+                'status' => $reclamation->getStatus(),
+                'teacher_id' => $reclamation->getTeacher() ? $reclamation->getTeacher()->getId() : null,
+                'student_id' => $reclamation->getStudent() ? $reclamation->getStudent()->getId() : null,
+                'reason' => $reclamation->getReason(),
+                'time' => $reclamation->getTime() ? $reclamation->getTime()->format('Y-m-d H:i:s') : null,
+            ];
+        }
+        usort($data, function($a, $b) {
+            return $b['time'] <=> $a['time'];
+        });
     
         return new JsonResponse($data, Response::HTTP_OK);
     }

@@ -30,6 +30,9 @@ class Notification
     #[ORM\ManyToOne(inversedBy: 'notifications')]
     private ?Student $student = null;
 
+    #[ORM\ManyToOne(inversedBy: 'notifications')]
+    private ?Group $rgroupe = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -79,6 +82,18 @@ class Notification
     public function setStudent(?Student $student): static
     {
         $this->student = $student;
+
+        return $this;
+    }
+
+    public function getRgroupe(): ?Group
+    {
+        return $this->rgroupe;
+    }
+
+    public function setRgroupe(?Group $rgroupe): static
+    {
+        $this->rgroupe = $rgroupe;
 
         return $this;
     }

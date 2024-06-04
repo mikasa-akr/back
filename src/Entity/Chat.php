@@ -18,10 +18,10 @@ class Chat
     #[ORM\ManyToOne(inversedBy: 'chats')]
     private ?Teacher $teacher = null;
 
-    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
+    #[ORM\OneToOne(cascade: ['remove'])]
     private ?Group $groupe = null;
 
-    #[ORM\OneToMany(targetEntity: Messagerie::class, mappedBy: 'chat')]
+    #[ORM\OneToMany(targetEntity: Messagerie::class, mappedBy: 'chat',cascade:['remove'])]
     private Collection $message;
 
     public function __construct()

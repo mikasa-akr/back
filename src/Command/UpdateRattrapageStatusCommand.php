@@ -48,7 +48,7 @@ class UpdateRattrapageStatusCommand extends Command
             $rattrapages = $session->getRattrapages();
     
             // Check if rattrapages exist
-            if ($rattrapages->isEmpty()) {
+            if ($rattrapages->isEmpty() && $rattrapages->getStatus() ==="done" ) {
                 continue; // Skip to the next session if no rattrapages exist
             }
     
@@ -71,7 +71,8 @@ class UpdateRattrapageStatusCommand extends Command
                 foreach ($rattrapages as $rattrapage) {
                     $session->setDateSeance($rattrapage->getDate());
                     $session->setTimeStart($rattrapage->getTime());
-                    $session->setStatus("confirm");
+                    $session->setStatus("active");
+                    $rattrapage->setStatus("done");
                     $group=$session->getGroupeSeanceId();
                     $firstStudent = $group->getStudents()->first(); // Use first() method
                     $forfait = $firstStudent->getForfait();
@@ -83,7 +84,6 @@ class UpdateRattrapageStatusCommand extends Command
 
                 }
             } elseif ($noCount > $yesCount) {
-                // If "no" votes are more than "yes" votes, update session status to "canceled session"
                 $session->setStatus("canceled session");
             }
         }

@@ -49,14 +49,18 @@ class Group
     #[ORM\ManyToMany(targetEntity: Teacher::class, mappedBy: 'groupM')]
     private Collection $teachers;
 
-    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
+    #[ORM\OneToOne(cascade: ['remove'])]
     private ?Chat $chat = null;
+
+    #[ORM\OneToMany(targetEntity: Notification::class, mappedBy: 'rgroupe')]
+    private Collection $notifications;
 
     public function __construct()
     {
         $this->sessions = new ArrayCollection();
         $this->students = new ArrayCollection();
         $this->teachers = new ArrayCollection();
+        $this->notifications = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -123,8 +127,9 @@ class Group
 
     public function removeStudent(Student $student): static
     {
-        $this->students->removeElement($student);
-
+        if ($this->students->removeElement($student)) {
+            $student->removeGroupe($this);
+        }
         return $this;
     }
 
@@ -236,4 +241,35 @@ class Group
 
         return $this;
     }
+
+    /**
+     * @return Collection<int, Notification>
+     */
+    public function getNotifications(): Collection
+    {
+        return $this->notifications;
+    }
+
+    public function addNotification(Notification $notification): static
+    {
+        if (!$this->notifications->contains($notification)) {
+            $this->notifications->add($notification);
+            $notification->setRgroupe($this);
+        }
+
+        return $this;
+    }
+
+    public function removeNotification(Notification $notification): static
+    {
+        if ($this->notifications->removeElement($notification)) {
+            // set the owning side to null (unless already changed)
+            if ($notification->getRgroupe() === $this) {
+                $notification->setRgroupe(null);
+            }
+        }
+
+        return $this;
+    }
+    
 }

@@ -8,6 +8,7 @@ use App\Entity\Session;
 use App\Entity\Student;
 use App\Entity\Teacher;
 use App\Entity\Rattrapage;
+use App\Entity\Notification;
 use App\Repository\SessionRepository;
 use App\Repository\RattrapageRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -94,7 +95,14 @@ class RattrapageCRUDController extends AbstractController
         $rattrapage->setStatus("scheduling");
         $rattrapage->setSession($session);
         $session->setStatus("rattrrapage scheduling");
-        // Persist the rattrapage entity
+
+        $notification = new Notification();
+        $text = 'your teacher create rattrapage come and vote';
+        $notification->setContent($text);
+        $notification->setRgroupe($session->getGroupeSeanceId());
+        $notification->setSentAt(new \DateTime('now'));
+
+        $entityManager->persist($notification);
         $entityManager->persist($rattrapage);
         $entityManager->flush();    
         // Return a success response
@@ -111,6 +119,7 @@ class RattrapageCRUDController extends AbstractController
         if (!$session) {
             return $this->json(['error' => 'Session not found'], Response::HTTP_NOT_FOUND);
         }
+        
         // Save vote for the session
         $vote = new Vote();
         $vote->setDate(new \DateTime('now'));
@@ -157,6 +166,7 @@ class RattrapageCRUDController extends AbstractController
                 $rattrapages = $s->getRattrapages(); // Retrieve all rattrapages related to this session
                 
                 foreach ($rattrapages as $rattrapage) {
+                    
                     $dateR = $rattrapage->getDate();
                     $dateAtR = $rattrapage->getDateAt();
                     $timeR = $rattrapage->getTime();

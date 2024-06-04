@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[Route('api/crud/student',name: 'api_crud_student')]
 class StudentCRUDController extends AbstractController
 {
@@ -103,7 +104,7 @@ class StudentCRUDController extends AbstractController
     
 
     #[Route('/{id}/edit', name: 'api_crud_student_edit', methods: ['PUT'])]
-    public function update($id, Request $request,EntityManagerInterface $entityManager): JsonResponse
+    public function update($id, Request $request,EntityManagerInterface $entityManager,UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         $student = $this->studentRepository->findOneBy(['id' => $id]);
         $data = json_decode($request->getContent(), true);
@@ -113,8 +114,11 @@ class StudentCRUDController extends AbstractController
         empty($data['email']) ? true : $student->setEmail($data['email']);
         empty($data['avatar']) ? true : $student->setAvatar($data['avatar']);
         empty($data['number']) ? true : $student->setNumber($data['number']);
-        empty($data['password']) ? true : $student->setPassword($data['password']);
-        empty($data['age']) ? true : $student->setAge($data['age']);
+        if (isset($data['password'])) {
+            $hashedPassword = $passwordHasher->hashPassword($student, $data['password']);
+            $student->setPassword($hashedPassword);
+        }   
+            empty($data['age']) ? true : $student->setAge($data['age']);
 
         if (!empty($data['forfait_id'])) {
             $forfaitId = $data['forfait_id'];

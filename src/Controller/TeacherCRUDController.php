@@ -24,6 +24,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 #[Route('api/crud/teacher', name:'api_crud_teacher')]
 class TeacherCRUDController extends AbstractController
@@ -80,7 +81,7 @@ class TeacherCRUDController extends AbstractController
     }
     
     #[Route('/{id}/edit', name: 'api_crud_teacher_edit', methods: ['PUT'])]
-    public function update($id, Request $request, EntityManagerInterface $entityManager): JsonResponse
+    public function update($id, Request $request, EntityManagerInterface $entityManager, UserPasswordHasherInterface $passwordHasher): JsonResponse
     {
         $teacher = $this->teacherRepository->findOneBy(['id' => $id]);
         if (!$teacher) {
@@ -94,8 +95,10 @@ class TeacherCRUDController extends AbstractController
         $teacher->setEmail($data['email'] ?? $teacher->getEmail());
         $teacher->setAvatar($data['avatar'] ?? $teacher->getAvatar());
         $teacher->setNumber($data['number'] ?? $teacher->getNumber());
-        $teacher->setPassword($data['password'] ?? $teacher->getPassword());
-    
+        if (isset($data['password'])) {
+            $hashedPassword = $passwordHasher->hashPassword($teacher, $data['password']);
+            $teacher->setPassword($hashedPassword);
+        }    
         // Associate the selected course with the teacher
         if (!empty($data['course_id'])) {
             $courseId = $data['course_id'];
@@ -113,7 +116,7 @@ class TeacherCRUDController extends AbstractController
                 return new JsonResponse(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
             }
             $teacher->setGender($gender);
-        }  
+        }
     
         // Persist changes to the teacher entity
         $entityManager->persist($teacher);
