@@ -29,72 +29,6 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[Route('/api', name: 'api_register')]
 class RegistrationController extends AbstractController
 {
-    #[Route('/signUp/teacher', name: 'api_register_teacher', methods: ['POST'])]
-    public function registerTeacher(ManagerRegistry $doctrine, Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager): Response
-    {
-        $em = $doctrine->getManager();
-    
-        $email = $request->request->get('email');
-        $plaintextPassword = $request->request->get('password');
-        $firstName = $request->request->get('first_name');
-        $lastName = $request->request->get('last_name');
-        $number = $request->request->get('number');
-        $registeredAt = new DateTime('now');
-        $avatarFile = $request->files->get('avatar');
-    
-        $avatarFileName = null;
-        if ($avatarFile) {
-            // Move uploaded file to a directory
-            $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
-            $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
-        }
-    
-        $courseId = $request->request->get('course_id');
-        $course = $entityManager->getRepository(Course::class)->find($courseId);
-        if (!$course) {
-            return $this->json(['error' => 'course not found'], Response::HTTP_NOT_FOUND);
-        }
-    
-        $genderId = $request->request->get('gender_id');
-        $gender = $entityManager->getRepository(Gender::class)->find($genderId);
-        if (!$gender) {
-            return $this->json(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
-        }
-        $price = $course->getPrice();
-    
-        $teacher = new Teacher();
-        $hashedPassword = $passwordHasher->hashPassword($teacher, $plaintextPassword);
-        $teacher->setPassword($hashedPassword);
-        $teacher->setEmail($email);
-        $teacher->setRoles(['ROLE_TEACHER']);
-        $teacher->setFirstName($firstName);
-        $teacher->setLastName($lastName);
-        $teacher->setRegisteredAt($registeredAt);
-        $teacher->setNumber($number);
-        $teacher->setGender($gender);
-        $teacher->setAvatar($avatarFileName);
-        $teacher->setCourse($course);
-        $teacher->setStatus("offline");
-        $teacher->setHourlyRate($price);
-    
-        // Assuming the ID of the student you want to associate with the notification
-        $studentId = 1;
-        $student = $entityManager->getRepository(Student::class)->find($studentId);
-    
-        $date = new \DateTime('now');
-        $notification = new Notification();
-        $notification->setContent('new teacher added');
-        $notification->setStudent($student);
-        $notification->setSentAt($date);
-    
-        $em->persist($teacher);
-        $em->persist($notification);
-        $em->flush();
-    
-        // Optionally, return the data of the newly registered teacher
-        return $this->json(['message' => 'Registered Successfully', 'teacher' => $teacher->toArray()]);
-    }
-    
 
     #[Route('/signUp/student', name: 'api_register_student', methods: ['POST'])]
     public function registerStudent(Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager, LoggerInterface $logger): Response {
@@ -324,17 +258,37 @@ class RegistrationController extends AbstractController
         return new JsonResponse($formattedgenders, Response::HTTP_OK);
     }
 
-    #[Route('/update_status/{id}', name: 'update_status', methods: ['PUT'])]
+    #[Route('/student/update_status/{id}', name: 'update_status_student', methods: ['PUT'])]
     public function updateStatus(EntityManagerInterface $entityManager, int $id,Request $request): JsonResponse
     {
         $student = $entityManager->getRepository(Student::class)->find($id);
-        $teacher = $entityManager->getRepository(Teacher::class)->find($id);
 
-        if (!$student && !$teacher) {
+        if (!$student) {
             return new JsonResponse(['error' => 'User not found'], 404);
         }
 
-        $user = $student ?: $teacher;
+        $user = $student;
+
+        // Assuming the request body contains the new status
+        $data = json_decode($request->getContent(), true);
+        $status = $data['status'] ?? null;
+
+        $user->setStatus("offline");
+        $entityManager->flush();
+
+        return new JsonResponse(['message' => 'Status updated successfully']);
+    }
+
+    #[Route('/teacher/update_status/{id}', name: 'update_status_teacher', methods: ['PUT'])]
+    public function updateStatus2(EntityManagerInterface $entityManager, int $id,Request $request): JsonResponse
+    {
+        $teacher = $entityManager->getRepository(Teacher::class)->find($id);
+
+        if (!$teacher) {
+            return new JsonResponse(['error' => 'User not found'], 404);
+        }
+
+        $user = $teacher;
 
         // Assuming the request body contains the new status
         $data = json_decode($request->getContent(), true);

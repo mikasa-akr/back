@@ -4,10 +4,14 @@ namespace App\Controller;
 
 use DateTime;
 use App\Entity\Group;
+use App\Entity\Course;
+use App\Entity\Gender;
 use App\Entity\Student;
 use App\Entity\Teacher;
+use App\Entity\Notification;
 use Psr\Log\LoggerInterface;
 use App\Service\MailerService;
+use Doctrine\Persistence\ManagerRegistry;
 use App\Repository\GroupRepository;
 use App\Repository\StudentRepository;
 use App\Repository\TeacherRepository;
@@ -152,6 +156,72 @@ public function resetPassword( Request $request, StudentRepository $studentRepos
     return $this->json(['message' => 'Password reset successfully'], Response::HTTP_OK);
 }
 
+
+#[Route('/signUp/teacher', name: 'api_register_teacher', methods: ['POST'])]
+public function registerTeacher(ManagerRegistry $doctrine, Request $request, UserPasswordHasherInterface $passwordHasher, EntityManagerInterface $entityManager): Response
+{
+    $em = $doctrine->getManager();
+
+    $email = $request->request->get('email');
+    $plaintextPassword = $request->request->get('password');
+    $firstName = $request->request->get('first_name');
+    $lastName = $request->request->get('last_name');
+    $number = $request->request->get('number');
+    $registeredAt = new DateTime('now');
+    $avatarFile = $request->files->get('avatar');
+
+    $avatarFileName = null;
+    if ($avatarFile) {
+        // Move uploaded file to a directory
+        $avatarFileName = md5(uniqid()) . '.' . $avatarFile->guessExtension();
+        $avatarFile->move($this->getParameter('PFE'), $avatarFileName);
+    }
+
+    $courseId = $request->request->get('course_id');
+    $course = $entityManager->getRepository(Course::class)->find($courseId);
+    if (!$course) {
+        return $this->json(['error' => 'course not found'], Response::HTTP_NOT_FOUND);
+    }
+
+    $genderId = $request->request->get('gender_id');
+    $gender = $entityManager->getRepository(Gender::class)->find($genderId);
+    if (!$gender) {
+        return $this->json(['error' => 'gender not found'], Response::HTTP_NOT_FOUND);
+    }
+    $price = $course->getPrice();
+
+    $teacher = new Teacher();
+    $hashedPassword = $passwordHasher->hashPassword($teacher, $plaintextPassword);
+    $teacher->setPassword($hashedPassword);
+    $teacher->setEmail($email);
+    $teacher->setRoles(['ROLE_TEACHER']);
+    $teacher->setFirstName($firstName);
+    $teacher->setLastName($lastName);
+    $teacher->setRegisteredAt($registeredAt);
+    $teacher->setNumber($number);
+    $teacher->setGender($gender);
+    $teacher->setAvatar($avatarFileName);
+    $teacher->setCourse($course);
+    $teacher->setStatus("offline");
+    $teacher->setHourlyRate($price);
+
+    // Assuming the ID of the student you want to associate with the notification
+    $studentId = 1;
+    $student = $entityManager->getRepository(Student::class)->find($studentId);
+
+    $date = new \DateTime('now');
+    $notification = new Notification();
+    $notification->setContent('new teacher added');
+    $notification->setStudent($student);
+    $notification->setSentAt($date);
+
+    $em->persist($teacher);
+    $em->persist($notification);
+    $em->flush();
+
+    // Optionally, return the data of the newly registered teacher
+    return $this->json(['message' => 'Registered Successfully', 'teacher' => $teacher->toArray()]);
+}
 
 
 
