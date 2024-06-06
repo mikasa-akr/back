@@ -206,35 +206,42 @@ class GroupCRUDController extends AbstractController
     }
 
     #[Route('/session', name: 'api_group_all', methods: ['GET'])]
-public function index2(GroupRepository $groupRepository, LoggerInterface $logger): JsonResponse
-{
-    $groups = $groupRepository->findAll();
-    $data = [];
-    foreach ($groups as $group) {
-        $sessions = $group->getSessions();
-        $total= 0;
-            $students = $group->getStudents()->first();
-            foreach ($students as $student) {
-                $nhrtotal=$student->getForfait()->getNbrHourSession();
-                $nhrseance=$student->getForfait()->getNbrHourSeance();
-                $total= $nhrtotal-$nhrseance;
+    public function index2(GroupRepository $groupRepository, LoggerInterface $logger): JsonResponse
+    {
+        $groups = $groupRepository->findAll();
+        $data = [];
+        foreach ($groups as $group) {
+            $sessions = $group->getSessions();
+            $total = 0;
+            $student = $group->getStudents()->first();
+            if ($student) {
+                $nhrtotal = $student->getForfait()->getNbrHourSession();
+                $nhrseance = $student->getForfait()->getNbrHourSeance();
+                $total = $nhrtotal / $nhrseance;
             }
-            if (count($sessions) < $total) {
-
-            $data[] = [
-                'id' => $group->getId(),
-                'type' => $group->getType(),
-                'name' => $group->getName(),
-                'avatar' => $group->getAvatar(),
-                'gender' => $group->getGender()->getName(),
-                'gender_id' => $group->getGender()->getId()
-            ];
-            $logger->info("Group {$group->getId()} added to response (sufficient remaining hours)"); // Success message
-        }else {
-            $logger->info("Group {$group->getId()} skipped (insufficient remaining hours)"); // Failure message
+    
+            $sessionCount = count($sessions);
+            $logger->info("Group {$group->getId()} has {$sessionCount} sessions, total allowed: {$total}");
+    
+            if ($sessionCount < $total) {
+                $data[] = [
+                    'id' => $group->getId(),
+                    'type' => $group->getType(),
+                    'teacher_first' => $group->getTeach()->getFirstName(),
+                    'teacher_last' => $group->getTeach()->getLastName(),
+                    'name' => $group->getName(),
+                    'avatar' => $group->getAvatar(),
+                    'gender' => $group->getGender()->getName(),
+                    'gender_id' => $group->getGender()->getId()
+                ];
+                $logger->info("Group {$group->getId()} added to response (sufficient remaining hours)"); // Success message
+            } else {
+                $logger->info("Group {$group->getId()} skipped (insufficient remaining hours)"); // Failure message
+            }
         }
+    
+        return new JsonResponse($data, Response::HTTP_OK);
     }
-
-    return new JsonResponse($data, Response::HTTP_OK);
-}
+    
+    
 }
